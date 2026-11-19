@@ -90,7 +90,21 @@ example), so filtering them dropped real notifications.
 
 The message also carries the ship's pilot, read with `ship.pilot.name`, so the
 notification can read like a report from the captain. Ships without a pilot
-(manager-driven fleet ships, for example) fall back to a generic crew label.
+(manager-driven fleet ships, for example) send an empty captain and the server
+drops the captain line.
+
+## Knowing when the queue is empty
+
+`ship.orders` is the whole queue and includes the ship's default order as its
+first entry, so the watcher iterates it and counts every entry that is not the
+default order. That count is the number of activities in the queue, the running
+one included.
+
+When the count goes from positive to zero, a second event
+(`FleetNotifier.Idle`) is raised in the same pass as the last finished order, and
+the player gets the "all missions completed" message. The previous busy state
+is kept in `md.$WasBusy` so a ship that was already idle when the save was loaded
+does not report anything.
 
 ## Two MD traps this design avoids
 

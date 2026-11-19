@@ -31,7 +31,9 @@ const (
 var version = "dev"
 
 // OrderEvent is the JSON body posted by fleet_notifier/ui/notifier.lua.
+// Kind is "order" for a finished order and "idle" when the ship's queue emptied.
 type OrderEvent struct {
+	Kind    string `json:"kind"`
 	Code    string `json:"code"`
 	Ship    string `json:"ship"`
 	Order   string `json:"order"`
@@ -139,7 +141,7 @@ func (n *notifier) handleOrderFinished(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n.logger.Printf("event ship=%q order=%q sector=%q code=%q captain=%q", event.Ship, event.Order, event.Sector, event.Code, event.Captain)
+	n.logger.Printf("event kind=%q ship=%q order=%q sector=%q code=%q captain=%q", event.Kind, event.Ship, event.Order, event.Sector, event.Code, event.Captain)
 
 	// Answer at once: the Lua side should never wait on ntfy or Telegram.
 	go n.dispatch(event)
@@ -208,6 +210,19 @@ func formatMessage(event OrderEvent) (title, body string) {
 		title = "Diário de bordo da nave " + ship + " " + event.Code + ","
 	} else {
 		title = "Diário de bordo da nave " + ship + ","
+	}
+
+	if event.Kind == "idle" {
+		if event.Captain != "" {
+			body = "Capitão " + event.Captain
+			if event.Code != "" {
+				body += ", da nave " + ship + " " + event.Code + ","
+			} else {
+				body += ", da nave " + ship + ","
+			}
+			return title, body + " informa que todas as missões foram concluídas."
+		}
+		return title, "Todas as missões foram concluídas."
 	}
 
 	order := event.Order
@@ -313,6 +328,7 @@ func (n *notifier) do(req *http.Request, provider string) error {
 
 func (e OrderEvent) sanitized() OrderEvent {
 	return OrderEvent{
+		Kind:    trim(e.Kind),
 		Code:    trim(e.Code),
 		Ship:    trim(e.Ship),
 		Order:   trim(e.Order),

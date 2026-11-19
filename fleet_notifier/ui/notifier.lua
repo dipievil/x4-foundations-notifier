@@ -2,10 +2,13 @@
   Fleet Order Notifier -- UI side.
 
   Loaded into the menus Lua environment through ../ui.xml. The Mission Director
-  script (../md/fleet_orders.xml) raises one string per finished order, split by
-  "|" in this order:
+  script (../md/fleet_orders.xml) raises two events:
 
-      shipcode | shipname | ordername | sectorname | captainname
+      FleetNotifier.OrderFinished
+          shipcode | shipname | ordername | sectorname | captainname
+
+      FleetNotifier.Idle
+          shipcode | shipname | captainname
 
   The fields are forwarded as JSON to the Go server with the djfhe_http
   extension. See ../../README.md for setup.
@@ -49,24 +52,9 @@ local function splitFields(text)
     return fields
 end
 
-local function onOrderFinished(_, param)
-    log("order finished event: " .. tostring(param))
-
-    if type(param) ~= "string" or param == "" then
-        return
-    end
-
-    local parts = splitFields(param)
-    local payload = {
-        code = parts[1] or "",
-        ship = parts[2] or "",
-        order = parts[3] or "",
-        sector = parts[4] or "",
-        captain = parts[5] or "",
-    }
-
+local function sendEvent(payload)
     if payload.ship == "" then
-        log("dropping event without a ship name: " .. tostring(param))
+        log("dropping event without a ship name")
         return
     end
 
@@ -94,20 +82,56 @@ local function onOrderFinished(_, param)
     end)
 end
 
+local function onOrderFinished(_, param)
+    log("order finished event: " .. tostring(param))
+
+    if type(param) ~= "string" or param == "" then
+        return
+    end
+
+    local parts = splitFields(param)
+    sendEvent({
+        kind = "order",
+        code = parts[1] or "",
+        ship = parts[2] or "",
+        order = parts[3] or "",
+        sector = parts[4] or "",
+        captain = parts[5] or "",
+    })
+end
+
+-- Raised when the last queued activity of a ship ends and the queue is empty.
+local function onIdle(_, param)
+    log("idle event: " .. tostring(param))
+
+    if type(param) ~= "string" or param == "" then
+        return
+    end
+
+    local parts = splitFields(param)
+    sendEvent({
+        kind = "idle",
+        code = parts[1] or "",
+        ship = parts[2] or "",
+        captain = parts[3] or "",
+    })
+end
+
 -- Handshake from the MD script: proves the MD -> Lua path works even when no
 -- order is given. Shows up in debuglog.txt as "Ping".
 local function onPing(_, param)
     log("Ping from MD: " .. tostring(param))
 end
 
-local ok, err = pcall(RegisterEvent, "FleetNotifier.OrderFinished", onOrderFinished)
-if not ok then
-    log("RegisterEvent(OrderFinished) failed: " .. tostring(err))
+local function register(name, handler)
+    local ok, err = pcall(RegisterEvent, name, handler)
+    if not ok then
+        log("RegisterEvent(" .. name .. ") failed: " .. tostring(err))
+    end
 end
 
-local okPing, errPing = pcall(RegisterEvent, "FleetNotifier.Ping", onPing)
-if not okPing then
-    log("RegisterEvent(Ping) failed: " .. tostring(errPing))
-end
+register("FleetNotifier.OrderFinished", onOrderFinished)
+register("FleetNotifier.Idle", onIdle)
+register("FleetNotifier.Ping", onPing)
 
 log("ui loaded")

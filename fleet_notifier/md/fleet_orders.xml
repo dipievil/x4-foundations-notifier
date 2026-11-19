@@ -41,8 +41,15 @@
           <debug_text text="'FleetNotifier: watcher started, %s ships'.[$Ships.count]" />
         </do_if>
 
+        <!-- Separate guard so an existing save without the busy table migrates
+             without losing the seen-order state. -->
+        <do_if value="not md.$WasBusy?">
+          <set_value name="md.$WasBusy" exact="table[]" />
+        </do_if>
+
         <do_for_each name="$Ship" in="$Ships">
           <set_value name="$CurrentOrder" exact="$Ship.order" />
+          <set_value name="$ShipName" exact="$Ship.knownname" />
 
           <!--
             Never store null: null != null is true in MD, which made every
@@ -59,6 +66,25 @@
                 <set_value name="$OrderName" exact="$CurrentOrder.name" />
               </do_if>
             </do_if>
+          </do_if>
+
+          <!--
+            Activities in the queue. ship.orders holds the whole queue with the
+            default order as its first entry, so the default order is skipped
+            and everything else counts, including the order currently running.
+          -->
+          <set_value name="$Active" exact="0" />
+          <do_if value="$Ship.orders">
+            <do_for_each name="$QueuedOrder" in="$Ship.orders">
+              <do_if value="$QueuedOrder != $Ship.defaultorder">
+                <set_value name="$Active" operation="add" exact="1" />
+              </do_if>
+            </do_for_each>
+          </do_if>
+
+          <set_value name="$IsBusy" exact="false" />
+          <do_if value="$Active gt 0">
+            <set_value name="$IsBusy" exact="true" />
           </do_if>
 
           <!--
@@ -84,8 +110,6 @@
             <set_value name="$PreviousName" exact="md.$SeenNames.{$Ship}" />
 
             <do_if value="$PreviousId != 'none' and $PreviousOrder != $CurrentOrder">
-              <set_value name="$ShipName" exact="$Ship.knownname" />
-
               <set_value name="$SectorName" exact="'Unknown sector'" />
               <do_if value="$Ship.sector">
                 <set_value name="$SectorName" exact="$Ship.sector.knownname" />
@@ -98,11 +122,24 @@
             </do_if>
           </do_if>
 
+          <!--
+            Second event: the queue went from having activities to none. It is
+            raised in the same pass as the last finished order, so the player
+            gets both messages.
+          -->
+          <do_if value="md.$WasBusy.{$Ship}? and md.$WasBusy.{$Ship} and not $IsBusy">
+            <set_value name="$IdlePayload" exact="'%s|%s|%s'.[$Ship.idcode, $ShipName, $Captain]" />
+
+            <debug_text text="'FleetNotifier idle: %s'.[$IdlePayload]" chance="100" />
+            <raise_lua_event name="'FleetNotifier.Idle'" param="$IdlePayload" />
+          </do_if>
+
           <set_value name="md.$SeenOrder.{$Ship}" exact="$CurrentOrder" />
           <set_value name="md.$SeenIds.{$Ship}" exact="$OrderId" />
           <set_value name="md.$SeenNames.{$Ship}" exact="$OrderName" />
+          <set_value name="md.$WasBusy.{$Ship}" exact="$IsBusy" />
 
-          <debug_text text="'FleetNotifier sample: %s order=%s name=%s captain=%s'.[$Ship.idcode, $OrderId, $OrderName, $Captain]" chance="100" />
+          <debug_text text="'FleetNotifier sample: %s order=%s name=%s active=%s captain=%s'.[$Ship.idcode, $OrderId, $OrderName, $Active, $Captain]" chance="100" />
         </do_for_each>
 
         <reset_cue cue="FleetNotifier_Watch" />

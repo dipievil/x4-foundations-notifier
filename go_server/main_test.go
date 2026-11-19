@@ -301,3 +301,20 @@ func TestFormatMessageUsesCaptain(t *testing.T) {
 		t.Errorf("body should name the captain: %q", body)
 	}
 }
+
+func TestFormatMessageIdle(t *testing.T) {
+	title, body := formatMessage(OrderEvent{
+		Kind:    "idle",
+		Ship:    "Kukri",
+		Code:    "AIX-262",
+		Captain: "Rei Mason",
+	})
+
+	if title != "Diário de bordo da nave Kukri AIX-262," {
+		t.Errorf("title: got %q", title)
+	}
+	want := "Capitão Rei Mason, da nave Kukri AIX-262, informa que todas as missões foram concluídas."
+	if body != want {
+		t.Errorf("body: got %q, want %q", body, want)
+	}
+}

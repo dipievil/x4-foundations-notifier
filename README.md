@@ -149,13 +149,14 @@ If you set `X4_TOKEN`, add `-H 'Authorization: Bearer <token>'` to the request.
 Mission Director packs one string per event, because `raise_lua_event` carries a single value:
 
 ```
-shipcode|shipname|ordername|sectorname|captainname
+shipcode|shipname|ordername|sectorname|captainname   (FleetNotifier.OrderFinished)
+shipcode|shipname|captainname                        (FleetNotifier.Idle)
 ```
 
 `ui/notifier.lua` splits it, builds a table and lets `x4_http` encode it as JSON with `Content-Type: application/json`:
 
 ```json
-{"code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime", "captain": "Fulano de Tal"}
+{"kind": "order", "code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime", "captain": "Rei Mason"}
 ```
 
 The server trims and caps every field, logs the event, answers `202` and dispatches in the background. Telegram gets a role-play style message:
@@ -164,6 +165,13 @@ The server trims and caps every field, logs the event, answers `202` and dispatc
 Diário de bordo da nave Kukri AIX-262,
 A missão Atracar, no setor Netuno, foi concluída com sucesso.
 Capitão Rei Mason
+```
+
+When the last activity of the ship's queue ends, a second message follows:
+
+```
+Diário de bordo da nave Kukri AIX-262,
+Capitão Rei Mason, da nave Kukri AIX-262, informa que todas as missões foram concluídas.
 ```
 
 ## Troubleshooting
@@ -194,7 +202,7 @@ make build                 # dev binary in dist/
 make release               # bin/x4-notifier-windows-amd64.exe + bin/x4-notifier-linux-amd64
 ```
 
-`make release` stamps the version from the git tag/commit; set `VERSION=1.3.0` to override (the shipped binaries say `1.3.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
+`make release` stamps the version from the git tag/commit; set `VERSION=1.4.0` to override (the shipped binaries say `1.4.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
 
 ## Layout
 
