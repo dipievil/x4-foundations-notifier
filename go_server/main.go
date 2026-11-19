@@ -201,15 +201,15 @@ func (n *notifier) dispatch(event OrderEvent) {
 
 func formatMessage(event OrderEvent) (title, body string) {
 	// The message reads like a report from the ship's captain. Ships without a
-	// pilot fall back to the ship name so the sentence still makes sense.
-	captain := event.Captain
-	if captain == "" {
-		captain = event.Ship
+	// pilot fall back to the ship name, which the MD side sends as an empty
+	// captain field.
+	if event.Captain != "" {
+		title = "Capitão " + event.Captain
+	} else if event.Ship != "" {
+		title = "Ordem concluída: " + event.Ship
+	} else {
+		title = "Ordem concluída"
 	}
-	if captain == "" {
-		captain = "desconhecido"
-	}
-	title = "Capitão " + captain
 
 	order := event.Order
 	if order == "" {

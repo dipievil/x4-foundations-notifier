@@ -61,10 +61,11 @@
             </do_if>
           </do_if>
 
-          <!-- Pilot name for the role-play phrasing; ships without a pilot
-               (fleet ships moved by the manager, for example) fall back to a
-               generic crew label. -->
-          <set_value name="$Captain" exact="'Tripulação'" />
+          <!--
+            Pilot name for the role-play phrasing. Left empty when the ship has
+            no pilot; the server then falls back to the ship name.
+          -->
+          <set_value name="$Captain" exact="''" />
           <do_if value="$Ship.pilot">
             <do_if value="$Ship.pilot.name">
               <set_value name="$Captain" exact="$Ship.pilot.name" />
