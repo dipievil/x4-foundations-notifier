@@ -92,6 +92,12 @@ intact instead of throwing at load time.
 
 ## Server contract
 
+Configuration is read from `.env` in the working directory, then from the
+environment (a shell export wins), so a shipped binary is configured by editing
+one file. The binary is built with `scripts/build-release.sh`, which stamps the
+version into `main.version` (`-X main.version=...`) so `/health` and the startup
+log name the build.
+
 `POST /x4/order-finished`
 
 ```json

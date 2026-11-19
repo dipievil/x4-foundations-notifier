@@ -25,6 +25,10 @@ const (
 	providerTimeout = 15 * time.Second
 )
 
+// version is stamped at build time (see scripts/build-release.sh); "dev" means
+// this is a local build.
+var version = "dev"
+
 // OrderEvent is the JSON body posted by fleet_notifier/ui/notifier.lua.
 type OrderEvent struct {
 	Code   string `json:"code"`
@@ -125,6 +129,7 @@ func (n *notifier) handleOrderFinished(w http.ResponseWriter, r *http.Request) {
 func (n *notifier) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   "ok",
+		"version":  version,
 		"ntfy":     n.cfg.ntfyEnabled(),
 		"telegram": n.cfg.telegramEnabled(),
 		"auth":     n.cfg.token != "",
@@ -276,6 +281,17 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	// Non-developers run the shipped binary: a .env next to it is the config.
+	// Reading it before the environment lets a shell export still win.
+	if err := loadDotEnv(".env"); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			logger.Printf("warning: cannot read .env: %v", err)
+		}
+	} else {
+		logger.Print("configuration loaded from .env")
+	}
+
 	cfg := loadConfig()
 	n := newNotifier(cfg, logger)
 
@@ -305,6 +321,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
+	logger.Printf("x4-notifier %s", version)
 	logger.Printf("listening on http://%s (ntfy=%t telegram=%t auth=%t)",
 		cfg.listen, cfg.ntfyEnabled(), cfg.telegramEnabled(), cfg.token != "")
 

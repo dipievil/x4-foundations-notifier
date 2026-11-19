@@ -35,3 +35,7 @@ go.work.sum
 
 # Build output (server binary, packaged mod)
 dist/
+
+# The released binaries in bin/ are shipped on purpose, despite *.exe above.
+!bin/
+!bin/*.exe
