@@ -200,15 +200,14 @@ func (n *notifier) dispatch(event OrderEvent) {
 }
 
 func formatMessage(event OrderEvent) (title, body string) {
-	// The message reads like a report from the ship's captain. Ships without a
-	// pilot fall back to the ship name, which the MD side sends as an empty
-	// captain field.
-	if event.Captain != "" {
-		title = "Capitão " + event.Captain
-	} else if event.Ship != "" {
-		title = "Ordem concluída: " + event.Ship
+	ship := event.Ship
+	if ship == "" {
+		ship = "desconhecida"
+	}
+	if event.Code != "" {
+		title = "Diário de bordo da nave " + ship + " " + event.Code + ","
 	} else {
-		title = "Ordem concluída"
+		title = "Diário de bordo da nave " + ship + ","
 	}
 
 	order := event.Order
@@ -220,13 +219,9 @@ func formatMessage(event OrderEvent) (title, body string) {
 		sector = "desconhecido"
 	}
 
-	lines := []string{"Informando que a missão " + order + " no setor " + sector + " foi concluída."}
-	if event.Ship != "" {
-		if event.Code != "" {
-			lines = append(lines, event.Ship+" ("+event.Code+")")
-		} else {
-			lines = append(lines, event.Ship)
-		}
+	lines := []string{"A missão " + order + ", no setor " + sector + ", foi concluída com sucesso."}
+	if event.Captain != "" {
+		lines = append(lines, "Capitão "+event.Captain)
 	}
 	return title, strings.Join(lines, "\n")
 }

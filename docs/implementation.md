@@ -139,7 +139,7 @@ log name the build.
 
 Telegram is sent without `parse_mode` on purpose: ship names contain `_` and `*`,
 and both Markdown flavors reject them with a 400. ntfy is published with a JSON
-body rather than headers, which keeps the accented title (`Ordem concluída`)
+body rather than headers, which keeps the accented title (`Diário de bordo`)
 intact. Gotify takes a JSON body too (`title`, `message`, `priority`) and the
 application token as `X-Gotify-Key`, not the `?token=` query parameter, so the
 secret never lands in a URL or a proxy log. Providers are independent: each one

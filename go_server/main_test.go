@@ -125,11 +125,11 @@ func TestDispatchSendsNtfyAndTelegram(t *testing.T) {
 	if ntfyPayload.Topic != "x4-fleet" {
 		t.Errorf("ntfy topic: got %q", ntfyPayload.Topic)
 	}
-	if !strings.Contains(ntfyPayload.Title, "Titan") {
-		t.Errorf("ntfy title missing ship: %q", ntfyPayload.Title)
+	if !strings.Contains(ntfyPayload.Title, "Titan") || !strings.Contains(ntfyPayload.Title, "ABC-123") {
+		t.Errorf("ntfy title missing ship or code: %q", ntfyPayload.Title)
 	}
-	if !strings.Contains(ntfyPayload.Message, "Argon Prime") || !strings.Contains(ntfyPayload.Message, "ABC-123") {
-		t.Errorf("ntfy message missing fields: %q", ntfyPayload.Message)
+	if !strings.Contains(ntfyPayload.Message, "Argon Prime") {
+		t.Errorf("ntfy message missing sector: %q", ntfyPayload.Message)
 	}
 
 	telegram := waitFor(t, telegramCh)
@@ -287,17 +287,17 @@ func TestFormatMessageUsesCaptain(t *testing.T) {
 		Code:    "AIX-262",
 		Order:   "Atracar",
 		Sector:  "Netuno",
-		Captain: "Fulano",
+		Captain: "Rei Mason",
 	})
 
-	if title != "Capitão Fulano" {
+	if title != "Diário de bordo da nave Kukri AIX-262," {
 		t.Errorf("title: got %q", title)
 	}
-	want := "Informando que a missão Atracar no setor Netuno foi concluída."
+	want := "A missão Atracar, no setor Netuno, foi concluída com sucesso."
 	if !strings.Contains(body, want) {
 		t.Errorf("body: got %q, want it to contain %q", body, want)
 	}
-	if !strings.Contains(body, "Kukri (AIX-262)") {
-		t.Errorf("body should name the ship and code: %q", body)
+	if !strings.Contains(body, "Capitão Rei Mason") {
+		t.Errorf("body should name the captain: %q", body)
 	}
 }

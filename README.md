@@ -161,9 +161,9 @@ shipcode|shipname|ordername|sectorname|captainname
 The server trims and caps every field, logs the event, answers `202` and dispatches in the background. Telegram gets a role-play style message:
 
 ```
-Capitão Fulano de Tal
-Informando que a missão Atracar no setor Netuno foi concluída.
-Kukri (ABC-123)
+Diário de bordo da nave Kukri AIX-262,
+A missão Atracar, no setor Netuno, foi concluída com sucesso.
+Capitão Rei Mason
 ```
 
 ## Troubleshooting
@@ -194,7 +194,7 @@ make build                 # dev binary in dist/
 make release               # bin/x4-notifier-windows-amd64.exe + bin/x4-notifier-linux-amd64
 ```
 
-`make release` stamps the version from the git tag/commit; set `VERSION=1.2.0` to override (the shipped binaries say `1.2.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
+`make release` stamps the version from the git tag/commit; set `VERSION=1.3.0` to override (the shipped binaries say `1.3.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
 
 ## Layout
 
