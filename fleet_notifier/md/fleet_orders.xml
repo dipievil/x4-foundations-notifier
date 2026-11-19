@@ -11,8 +11,9 @@
     <cue name="FleetNotifier_TrackFleet" namespace="this" />
 
     <!--
-      Watches every player ship and reports an order when it stops being the
-      ship's current order: finished, cancelled or replaced by another order.
+      Watches every player ship and reports every order that stops being the
+      ship's current order: finished, cancelled or replaced by another order,
+      automatic ones included.
 
       The comparison is on the order object, not on its id or name, so three
       identical queued orders are three separate events.
@@ -21,11 +22,8 @@
       and a group held in a cue variable is not rebuilt when the cue that
       created it is already completed in the savegame.
 
-      Skipped on purpose:
-        - the ship's default order (AutoTrade, Patrol... loop forever),
-        - no order at all (a ship that was already idle),
-        - Undock: the engine inserts it whenever a docked ship starts a new
-          order, so reporting it would add one message per order given.
+      Only one case is silent: a ship that had no order at all, because there
+      is nothing to report.
     -->
     <cue name="FleetNotifier_Watch" namespace="this">
       <delay exact="3s" />
@@ -40,7 +38,6 @@
           <set_value name="md.$SeenOrder" exact="table[]" />
           <set_value name="md.$SeenIds" exact="table[]" />
           <set_value name="md.$SeenNames" exact="table[]" />
-          <set_value name="md.$SeenDefault" exact="table[]" />
           <debug_text text="'FleetNotifier: watcher started, %s ships'.[$Ships.count]" />
         </do_if>
 
@@ -54,8 +51,6 @@
           -->
           <set_value name="$OrderId" exact="'none'" />
           <set_value name="$OrderName" exact="'none'" />
-          <set_value name="$IsDefault" exact="false" />
-
           <do_if value="$CurrentOrder">
             <do_if value="$CurrentOrder.id">
               <set_value name="$OrderId" exact="$CurrentOrder.id" />
@@ -64,11 +59,15 @@
                 <set_value name="$OrderName" exact="$CurrentOrder.name" />
               </do_if>
             </do_if>
+          </do_if>
 
-            <do_if value="$Ship.defaultorder">
-              <do_if value="$CurrentOrder == $Ship.defaultorder">
-                <set_value name="$IsDefault" exact="true" />
-              </do_if>
+          <!-- Pilot name for the role-play phrasing; ships without a pilot
+               (fleet ships moved by the manager, for example) fall back to a
+               generic crew label. -->
+          <set_value name="$Captain" exact="'Tripulação'" />
+          <do_if value="$Ship.pilot">
+            <do_if value="$Ship.pilot.name">
+              <set_value name="$Captain" exact="$Ship.pilot.name" />
             </do_if>
           </do_if>
 
@@ -82,9 +81,8 @@
             <set_value name="$PreviousOrder" exact="md.$SeenOrder.{$Ship}" />
             <set_value name="$PreviousId" exact="md.$SeenIds.{$Ship}" />
             <set_value name="$PreviousName" exact="md.$SeenNames.{$Ship}" />
-            <set_value name="$PreviousDefault" exact="md.$SeenDefault.{$Ship}" />
 
-            <do_if value="$PreviousId != 'none' and not $PreviousDefault and $PreviousId != 'Undock' and $PreviousOrder != $CurrentOrder">
+            <do_if value="$PreviousId != 'none' and $PreviousOrder != $CurrentOrder">
               <set_value name="$ShipName" exact="$Ship.knownname" />
 
               <set_value name="$SectorName" exact="'Unknown sector'" />
@@ -92,7 +90,7 @@
                 <set_value name="$SectorName" exact="$Ship.sector.knownname" />
               </do_if>
 
-              <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$Ship.idcode, $ShipName, $PreviousName, $SectorName]" />
+              <set_value name="$Payload" exact="'%s|%s|%s|%s|%s'.[$Ship.idcode, $ShipName, $PreviousName, $SectorName, $Captain]" />
 
               <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" />
               <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
@@ -102,9 +100,8 @@
           <set_value name="md.$SeenOrder.{$Ship}" exact="$CurrentOrder" />
           <set_value name="md.$SeenIds.{$Ship}" exact="$OrderId" />
           <set_value name="md.$SeenNames.{$Ship}" exact="$OrderName" />
-          <set_value name="md.$SeenDefault.{$Ship}" exact="$IsDefault" />
 
-          <debug_text text="'FleetNotifier sample: %s order=%s name=%s default=%s'.[$Ship.idcode, $OrderId, $OrderName, $IsDefault]" chance="100" />
+          <debug_text text="'FleetNotifier sample: %s order=%s name=%s captain=%s'.[$Ship.idcode, $OrderId, $OrderName, $Captain]" chance="100" />
         </do_for_each>
 
         <reset_cue cue="FleetNotifier_Watch" />

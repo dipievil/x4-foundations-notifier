@@ -149,16 +149,22 @@ If you set `X4_TOKEN`, add `-H 'Authorization: Bearer <token>'` to the request.
 Mission Director packs one string per event, because `raise_lua_event` carries a single value:
 
 ```
-shipcode|shipname|ordername|sectorname
+shipcode|shipname|ordername|sectorname|captainname
 ```
 
 `ui/notifier.lua` splits it, builds a table and lets `x4_http` encode it as JSON with `Content-Type: application/json`:
 
 ```json
-{"code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime"}
+{"code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime", "captain": "Fulano de Tal"}
 ```
 
-The server trims and caps every field, logs the event, answers `202` and dispatches in the background.
+The server trims and caps every field, logs the event, answers `202` and dispatches in the background. Telegram gets a role-play style message:
+
+```
+Capitão Fulano de Tal
+Informando que a missão Atracar no setor Netuno foi concluída.
+Kukri (ABC-123)
+```
 
 ## Troubleshooting
 
@@ -172,7 +178,7 @@ The server trims and caps every field, logs the event, answers `202` and dispatc
 
 **The mod fires for one ship but not for another.** The MD side scans every player-owned ship every 3 seconds, so a ship built or bought is picked up within one cycle. `debuglog.txt` shows `FleetNotifier: watcher started, <n> ships` once per session — if that number is lower than your fleet, the ships are not player-owned or not in the player's galaxy.
 
-**Way too many notifications.** The notifier reports the order that was running whenever the ship's current order changes, but it skips the ship's default order (AutoTrade, AutoMine, Patrol, Wait) and the engine's own `Undock`. Temporary sub-orders of a longer sequence (a trade run, for example) are reported, which is why a busy trader can be chatty. Extend the filters inside `FleetNotifier_Watch` if that is too much.
+**Way too many notifications.** Every order that stops being the ship's current order is reported, automatic and default orders included, so a busy fleet can be chatty. The filters live in `FleetNotifier_Watch`; removing an entry from the notification condition is enough to silence a category.
 
 **The notification shows an order code instead of a name.** The order has no localized name available to the script, so the fallback prints its id (`DockAt`, `MoveWait`, ...).
 
@@ -188,7 +194,7 @@ make build                 # dev binary in dist/
 make release               # bin/x4-notifier-windows-amd64.exe + bin/x4-notifier-linux-amd64
 ```
 
-`make release` stamps the version from the git tag/commit; set `VERSION=1.1.1` to override (the shipped binaries say `1.1.1`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
+`make release` stamps the version from the git tag/commit; set `VERSION=1.2.0` to override (the shipped binaries say `1.2.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
 
 ## Layout
 

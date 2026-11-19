@@ -5,7 +5,7 @@
   script (../md/fleet_orders.xml) raises one string per finished order, split by
   "|" in this order:
 
-      shipcode | shipname | ordername | sectorname
+      shipcode | shipname | ordername | sectorname | captainname
 
   The fields are forwarded as JSON to the Go server with the djfhe_http
   extension. See ../../README.md for setup.
@@ -62,6 +62,7 @@ local function onOrderFinished(_, param)
         ship = parts[2] or "",
         order = parts[3] or "",
         sector = parts[4] or "",
+        captain = parts[5] or "",
     }
 
     if payload.ship == "" then

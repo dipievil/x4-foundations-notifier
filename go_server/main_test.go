@@ -280,3 +280,24 @@ func TestFormatMessageFillsMissingFields(t *testing.T) {
 		t.Errorf("body should mark missing order/sector: %q", body)
 	}
 }
+
+func TestFormatMessageUsesCaptain(t *testing.T) {
+	title, body := formatMessage(OrderEvent{
+		Ship:    "Kukri",
+		Code:    "AIX-262",
+		Order:   "Atracar",
+		Sector:  "Netuno",
+		Captain: "Fulano",
+	})
+
+	if title != "Capitão Fulano" {
+		t.Errorf("title: got %q", title)
+	}
+	want := "Informando que a missão Atracar no setor Netuno foi concluída."
+	if !strings.Contains(body, want) {
+		t.Errorf("body: got %q, want it to contain %q", body, want)
+	}
+	if !strings.Contains(body, "Kukri (AIX-262)") {
+		t.Errorf("body should name the ship and code: %q", body)
+	}
+}

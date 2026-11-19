@@ -12,7 +12,7 @@ FleetNotifier_Watch            (MD, every 3 s)
         │  compare ship.order with the previous sample
         ▼
 raise_lua_event "FleetNotifier.OrderFinished"  (one string)
-        │  "shipcode|shipname|ordername|sectorname"
+        │  "shipcode|shipname|ordername|sectorname|captainname"
         ▼
 RegisterEvent handler in ui/notifier.lua  (menus Lua environment)
         │  x4_http: async POST, JSON body
@@ -75,23 +75,22 @@ updates.
 
 ## What counts as a finished order
 
-The cue keeps the last order **object**, its id and name, and whether it was the
-ship's default order, per ship. It reports the previous order when the ship's
-current order is a different object — finished, cancelled or replaced. Comparing
-the object rather than the text is what makes three identical queued orders
-three separate events.
+The cue keeps the last order **object**, its id and name per ship. It reports the
+previous order when the ship's current order is a different object — finished,
+cancelled or replaced. Comparing the object rather than the text is what makes
+three identical queued orders three separate events.
 
-What is skipped, to keep the phone quiet:
+Every order is reported, automatic and default orders included, as requested.
+The only silent case is a ship that had no order at all, because there is nothing
+to report.
 
-- the previous order was the default order (AutoTrade, Patrol...): those loop
-  forever and would otherwise flood the phone;
-- there was no previous order (a ship that was already idle);
-- the previous order was `Undock`: the engine inserts it whenever a docked ship
-  starts a new order, so reporting it would add one message per order given.
+Temporary orders are not special-cased either: X4 marks ordinary player orders
+such as `DockAt` as temporary when they belong to a sequence (a trade run, for
+example), so filtering them dropped real notifications.
 
-Temporary orders are *not* filtered. X4 marks ordinary player orders such as
-`DockAt` as temporary when they are part of a sequence (a trade run, for
-example), so filtering those dropped real notifications.
+The message also carries the ship's pilot, read with `ship.pilot.name`, so the
+notification can read like a report from the captain. Ships without a pilot
+(manager-driven fleet ships, for example) fall back to a generic crew label.
 
 ## Two MD traps this design avoids
 
@@ -128,7 +127,7 @@ log name the build.
 `POST /x4/order-finished`
 
 ```json
-{"code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime"}
+{"code": "ABC-123", "ship": "Argon Titan", "order": "DockAt", "sector": "Argon Prime", "captain": "Fulano de Tal"}
 ```
 
 - `Authorization: Bearer <X4_TOKEN>` (or `X-Auth-Token`) when the token is set.

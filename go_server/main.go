@@ -32,10 +32,11 @@ var version = "dev"
 
 // OrderEvent is the JSON body posted by fleet_notifier/ui/notifier.lua.
 type OrderEvent struct {
-	Code   string `json:"code"`
-	Ship   string `json:"ship"`
-	Order  string `json:"order"`
-	Sector string `json:"sector"`
+	Code    string `json:"code"`
+	Ship    string `json:"ship"`
+	Order   string `json:"order"`
+	Sector  string `json:"sector"`
+	Captain string `json:"captain"`
 }
 
 type config struct {
@@ -138,7 +139,7 @@ func (n *notifier) handleOrderFinished(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n.logger.Printf("event ship=%q order=%q sector=%q code=%q", event.Ship, event.Order, event.Sector, event.Code)
+	n.logger.Printf("event ship=%q order=%q sector=%q code=%q captain=%q", event.Ship, event.Order, event.Sector, event.Code, event.Captain)
 
 	// Answer at once: the Lua side should never wait on ntfy or Telegram.
 	go n.dispatch(event)
@@ -199,7 +200,16 @@ func (n *notifier) dispatch(event OrderEvent) {
 }
 
 func formatMessage(event OrderEvent) (title, body string) {
-	title = fmt.Sprintf("Ordem concluída: %s", event.Ship)
+	// The message reads like a report from the ship's captain. Ships without a
+	// pilot fall back to the ship name so the sentence still makes sense.
+	captain := event.Captain
+	if captain == "" {
+		captain = event.Ship
+	}
+	if captain == "" {
+		captain = "desconhecido"
+	}
+	title = "Capitão " + captain
 
 	order := event.Order
 	if order == "" {
@@ -210,9 +220,13 @@ func formatMessage(event OrderEvent) (title, body string) {
 		sector = "desconhecido"
 	}
 
-	lines := []string{"Ordem: " + order, "Setor: " + sector}
-	if event.Code != "" {
-		lines = append(lines, "Código: "+event.Code)
+	lines := []string{"Informando que a missão " + order + " no setor " + sector + " foi concluída."}
+	if event.Ship != "" {
+		if event.Code != "" {
+			lines = append(lines, event.Ship+" ("+event.Code+")")
+		} else {
+			lines = append(lines, event.Ship)
+		}
 	}
 	return title, strings.Join(lines, "\n")
 }
@@ -304,10 +318,11 @@ func (n *notifier) do(req *http.Request, provider string) error {
 
 func (e OrderEvent) sanitized() OrderEvent {
 	return OrderEvent{
-		Code:   trim(e.Code),
-		Ship:   trim(e.Ship),
-		Order:  trim(e.Order),
-		Sector: trim(e.Sector),
+		Code:    trim(e.Code),
+		Ship:    trim(e.Ship),
+		Order:   trim(e.Order),
+		Sector:  trim(e.Sector),
+		Captain: trim(e.Captain),
 	}
 }
 
