@@ -6,65 +6,69 @@
     <!--
       Legacy shell. Earlier versions kept the fleet roster and the order
       listener under this cue. It stays in place, empty, because MD refuses to
-      remove a parent cue that still owns children in an existing savegame:
-      with the parent present, the old children are dropped cleanly.
+      remove a parent cue that still owns children in an existing savegame.
     -->
     <cue name="FleetNotifier_TrackFleet" namespace="this" />
 
     <!--
-      Watches the current order of every player ship and reports an order the
-      moment it stops being the current one, which is what "the order
-      finished" looks like from outside the AI script.
+      Watches every player ship and reports an order when it stops being the
+      ship's current order: finished, cancelled or replaced by another order.
+
+      The comparison is on the order object, not on its id or name, so three
+      identical queued orders are three separate events.
 
       Polling is deliberate. event_object_order_finished needs a source group,
       and a group held in a cue variable is not rebuilt when the cue that
-      created it is already completed in the savegame; the listener then ends
-      up subscribed to nothing. This cue only reads live ship state, so it is
-      unaffected by what the savegame remembers.
+      created it is already completed in the savegame.
 
-      Filters, so default behaviour does not spam:
-        - the previous order was not the ship's default order (AutoTrade,
-          Patrol, ... keep running and changing name),
-        - the previous order was not temporary (the engine's own Undock and
-          similar orders that appear for a moment when a new order starts).
+      Skipped on purpose:
+        - the ship's default order (AutoTrade, Patrol... loop forever),
+        - no order at all (a ship that was already idle),
+        - Undock: the engine inserts it whenever a docked ship starts a new
+          order, so reporting it would add one message per order given.
     -->
     <cue name="FleetNotifier_Watch" namespace="this">
       <delay exact="3s" />
       <actions>
         <find_ship name="$Ships" space="player.galaxy" owner="faction.player" multiple="true" />
 
-        <!-- First run in a session: nothing seen yet, so nothing is reported. -->
-        <do_if value="not $SeenIds?">
-          <set_value name="$SeenIds" exact="table[]" />
-          <set_value name="$SeenNames" exact="table[]" />
-          <set_value name="$SeenTemporary" exact="table[]" />
+        <!--
+          State lives in the script's static namespace (md.$...) because a cue
+          that resets itself drops its own namespace variables.
+        -->
+        <do_if value="not md.$SeenOrder?">
+          <set_value name="md.$SeenOrder" exact="table[]" />
+          <set_value name="md.$SeenIds" exact="table[]" />
+          <set_value name="md.$SeenNames" exact="table[]" />
+          <set_value name="md.$SeenDefault" exact="table[]" />
           <debug_text text="'FleetNotifier: watcher started, %s ships'.[$Ships.count]" />
         </do_if>
 
         <do_for_each name="$Ship" in="$Ships">
-          <set_value name="$DefaultId" exact="'none'" />
-          <do_if value="$Ship.defaultorder">
-            <do_if value="$Ship.defaultorder.id">
-              <set_value name="$DefaultId" exact="$Ship.defaultorder.id" />
-            </do_if>
-          </do_if>
+          <set_value name="$CurrentOrder" exact="$Ship.order" />
 
           <!--
-            Never store null: the order of an idle ship can report a null id
-            or name, and MD treats null != null as true, which compared as
-            "the order changed" on every pass.
+            Never store null: null != null is true in MD, which made every
+            sample look like a change. Ids and names are strings, with 'none'
+            standing in for "no order".
           -->
           <set_value name="$OrderId" exact="'none'" />
           <set_value name="$OrderName" exact="'none'" />
-          <set_value name="$OrderTemporary" exact="false" />
-          <do_if value="$Ship.order">
-            <do_if value="$Ship.order.id">
-              <set_value name="$OrderId" exact="$Ship.order.id" />
-              <set_value name="$OrderName" exact="$Ship.order.id" />
-              <do_if value="$Ship.order.name">
-                <set_value name="$OrderName" exact="$Ship.order.name" />
+          <set_value name="$IsDefault" exact="false" />
+
+          <do_if value="$CurrentOrder">
+            <do_if value="$CurrentOrder.id">
+              <set_value name="$OrderId" exact="$CurrentOrder.id" />
+              <set_value name="$OrderName" exact="$OrderId" />
+              <do_if value="$CurrentOrder.name">
+                <set_value name="$OrderName" exact="$CurrentOrder.name" />
               </do_if>
-              <set_value name="$OrderTemporary" exact="$Ship.order.istemporary" />
+            </do_if>
+
+            <do_if value="$Ship.defaultorder">
+              <do_if value="$CurrentOrder == $Ship.defaultorder">
+                <set_value name="$IsDefault" exact="true" />
+              </do_if>
             </do_if>
           </do_if>
 
@@ -74,36 +78,33 @@
             component works and is what vanilla scripts do, e.g.
             $AttackingShipMarineTierAmounts.{$ship}.
           -->
-          <do_if value="$SeenIds.{$Ship}?">
-            <set_value name="$PreviousId" exact="$SeenIds.{$Ship}" />
-            <set_value name="$PreviousName" exact="$SeenNames.{$Ship}" />
-            <set_value name="$PreviousTemporary" exact="$SeenTemporary.{$Ship}" />
+          <do_if value="md.$SeenOrder.{$Ship}?">
+            <set_value name="$PreviousOrder" exact="md.$SeenOrder.{$Ship}" />
+            <set_value name="$PreviousId" exact="md.$SeenIds.{$Ship}" />
+            <set_value name="$PreviousName" exact="md.$SeenNames.{$Ship}" />
+            <set_value name="$PreviousDefault" exact="md.$SeenDefault.{$Ship}" />
 
-            <do_if value="$PreviousId != 'none' and $PreviousId != $DefaultId and not $PreviousTemporary">
-              <!--
-                Report only when the ship went back to idle (no order) or to
-                its default order: that is the moment the order really ended.
-                A queued follow-up order means the finished one was not last.
-              -->
-              <do_if value="$OrderId == 'none' or $OrderId == $DefaultId">
-                <set_value name="$ShipName" exact="$Ship.knownname" />
+            <do_if value="$PreviousId != 'none' and not $PreviousDefault and $PreviousId != 'Undock' and $PreviousOrder != $CurrentOrder">
+              <set_value name="$ShipName" exact="$Ship.knownname" />
 
-                <set_value name="$SectorName" exact="'Unknown sector'" />
-                <do_if value="$Ship.sector">
-                  <set_value name="$SectorName" exact="$Ship.sector.knownname" />
-                </do_if>
-
-                <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$Ship.idcode, $ShipName, $PreviousName, $SectorName]" />
-
-                <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" />
-                <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
+              <set_value name="$SectorName" exact="'Unknown sector'" />
+              <do_if value="$Ship.sector">
+                <set_value name="$SectorName" exact="$Ship.sector.knownname" />
               </do_if>
+
+              <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$Ship.idcode, $ShipName, $PreviousName, $SectorName]" />
+
+              <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" />
+              <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
             </do_if>
           </do_if>
 
-          <set_value name="$SeenIds.{$Ship}" exact="$OrderId" />
-          <set_value name="$SeenNames.{$Ship}" exact="$OrderName" />
-          <set_value name="$SeenTemporary.{$Ship}" exact="$OrderTemporary" />
+          <set_value name="md.$SeenOrder.{$Ship}" exact="$CurrentOrder" />
+          <set_value name="md.$SeenIds.{$Ship}" exact="$OrderId" />
+          <set_value name="md.$SeenNames.{$Ship}" exact="$OrderName" />
+          <set_value name="md.$SeenDefault.{$Ship}" exact="$IsDefault" />
+
+          <debug_text text="'FleetNotifier sample: %s order=%s name=%s default=%s'.[$Ship.idcode, $OrderId, $OrderName, $IsDefault]" chance="100" />
         </do_for_each>
 
         <reset_cue cue="FleetNotifier_Watch" />

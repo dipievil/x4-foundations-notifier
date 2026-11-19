@@ -172,7 +172,7 @@ The server trims and caps every field, logs the event, answers `202` and dispatc
 
 **The mod fires for one ship but not for another.** The MD side scans every player-owned ship every 3 seconds, so a ship built or bought is picked up within one cycle. `debuglog.txt` shows `FleetNotifier: watcher started, <n> ships` once per session — if that number is lower than your fleet, the ships are not player-owned or not in the player's galaxy.
 
-**Way too many notifications.** Loop behaviours (AutoTrade, AutoMine, Patrol) and the engine's own temporary orders (Undock and similar) are skipped on purpose in `md/fleet_orders.xml`. If a modded loop order still spams you, extend the filters inside `FleetNotifier_Watch`.
+**Way too many notifications.** The notifier reports the order that was running whenever the ship's current order changes, but it skips the ship's default order (AutoTrade, AutoMine, Patrol, Wait) and the engine's own `Undock`. Temporary sub-orders of a longer sequence (a trade run, for example) are reported, which is why a busy trader can be chatty. Extend the filters inside `FleetNotifier_Watch` if that is too much.
 
 **The notification shows an order code instead of a name.** The order has no localized name available to the script, so the fallback prints its id (`DockAt`, `MoveWait`, ...).
 

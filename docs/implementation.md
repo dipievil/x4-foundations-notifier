@@ -75,20 +75,23 @@ updates.
 
 ## What counts as a finished order
 
-The cue keeps the last order id, name and temporary flag per ship and reports
-when the ship goes back to idle (no order) or to its default order.
-`ship.order` returns the queued order while one runs and the default order once
-the queue is empty, so that transition is the reliable "the order ended"
-moment.
+The cue keeps the last order **object**, its id and name, and whether it was the
+ship's default order, per ship. It reports the previous order when the ship's
+current order is a different object — finished, cancelled or replaced. Comparing
+the object rather than the text is what makes three identical queued orders
+three separate events.
 
 What is skipped, to keep the phone quiet:
 
 - the previous order was the default order (AutoTrade, Patrol...): those loop
   forever and would otherwise flood the phone;
-- the previous order was temporary (the engine's own Undock and similar
-  orders that appear for a moment when a new order starts);
-- a queued follow-up order means the finished one was not the last, so only
-  the last order of a queue is reported.
+- there was no previous order (a ship that was already idle);
+- the previous order was `Undock`: the engine inserts it whenever a docked ship
+  starts a new order, so reporting it would add one message per order given.
+
+Temporary orders are *not* filtered. X4 marks ordinary player orders such as
+`DockAt` as temporary when they are part of a sequence (a trade run, for
+example), so filtering those dropped real notifications.
 
 ## Two MD traps this design avoids
 
