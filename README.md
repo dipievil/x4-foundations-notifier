@@ -29,7 +29,7 @@ The server binaries are already in `bin/`. They are self-contained — no Go, no
 
 1. Download the repository (Code → Download ZIP) and extract it.
 2. Double-click `install-x4-notifier.bat` and follow the prompts — it installs the extension and copies the server to `%LOCALAPPDATA%\x4-notifier` (details in [Install the mod](#install-the-mod)).
-3. Edit the `.env` file in that server folder and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values ([setup guide](docs/notification-apps-guide.md)).
+3. Edit the `.env` file in that server folder and fill in `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values ([setup guide](docs/notification-apps-guide.md)). `X4_TOKEN` can stay empty on a local install; if you set it, the installer keeps `TOKEN` in `ui/notifier.lua` in sync.
 4. Double-click `start-x4-notifier.bat` in the same folder and leave the window open while you play. It shows a log line for every event it receives.
 5. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
 
@@ -77,8 +77,9 @@ The script:
 4. offers to write the shared token into `ui/notifier.lua`;
 5. copies the server (`x4-notifier` binary plus the Windows launcher) to
    `%LOCALAPPDATA%\x4-notifier` on Windows or `~/.local/share/x4-notifier` on
-   Linux, and creates `.env` there from the template — pre-filled with the token
-   you entered, and never overwriting a `.env` that already exists.
+   Linux, and creates `.env` there from the template. An existing `.env` keeps
+   its values; only `X4_TOKEN` is rewritten so it always matches `TOKEN` in the
+   freshly copied `ui/notifier.lua`.
 
 Non-interactive use, if you prefer to pass the values:
 
@@ -137,11 +138,11 @@ Both providers can be enabled at once. With neither set the server still runs an
 curl -i http://127.0.0.1:47100/health
 curl -i -X POST http://127.0.0.1:47100/x4/order-finished \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer change-me' \
   -d '{"code":"ABC-123","ship":"Argon Titan","order":"DockAt","sector":"Argon Prime"}'
 ```
 
 A `202` means the notification was queued, `401` means the token does not match.
+If you set `X4_TOKEN`, add `-H 'Authorization: Bearer <token>'` to the request.
 
 ## How the pieces talk
 
@@ -167,7 +168,7 @@ The server trims and caps every field, logs the event, answers `202` and dispatc
 3. Confirm Protected UI Mode is off; otherwise `djfhe_http` cannot load its DLLs.
 4. `curl` the endpoint from the same machine (above), then compare with the Lua `ENDPOINT`.
 
-**`401` in the server window / Lua logs "server returned 401".** `TOKEN` in `notifier.lua` and `X4_TOKEN` in `.env` differ.
+**`rejected request ... token mismatch` in the server window (or `401` in the Lua log).** `TOKEN` in `notifier.lua` and `X4_TOKEN` in `.env` differ. Either leave both empty or give them the same value, then restart the server **and X4**.
 
 **The mod fires for the ship I fly, but not for my fleet.** The roster cue rebuilds `$FleetShips` every 5 minutes and at load. A ship built in the last few minutes may need one refresh cycle; check the log for events after that.
 

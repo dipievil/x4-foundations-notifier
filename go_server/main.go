@@ -115,6 +115,7 @@ func (n *notifier) routes() http.Handler {
 
 func (n *notifier) handleOrderFinished(w http.ResponseWriter, r *http.Request) {
 	if !n.authorized(r) {
+		n.logger.Printf("rejected request from %s: token mismatch (check X4_TOKEN in .env and TOKEN in ui/notifier.lua)", r.RemoteAddr)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}

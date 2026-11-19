@@ -211,27 +211,6 @@ Write-Say "fleet_notifier: copied to $destination"
 
 # --- 4. optional shared token ----------------------------------------------
 
-if (-not $Token -and -not $Yes) {
-    Write-Say ''
-    $Token = Read-Host 'Shared token for the local server (must match X4_TOKEN in .env, empty for none)'
-}
-
-if ($Token) {
-    if ($Token -notmatch '^[A-Za-z0-9._-]+$') {
-        Write-Warn 'The token has characters the script will not write (allowed: A-Z a-z 0-9 . _ -).'
-        Write-Warn "Set it by hand in $(Join-Path (Join-Path $destination 'ui') 'notifier.lua')"
-    } else {
-        $luaPath = Join-Path (Join-Path $destination 'ui') 'notifier.lua'
-        $content = Get-Content -LiteralPath $luaPath -Raw
-        $content = [regex]::Replace($content, '(?m)^local TOKEN = ".*"$', ('local TOKEN = "{0}"' -f $Token))
-        $utf8 = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText($luaPath, $content, $utf8)
-        Write-Say 'Token: written to ui\notifier.lua'
-    }
-}
-
-# --- 5. deploy the server folder -------------------------------------------
-
 Write-Say ''
 if (-not $InstallDir) {
     if ($env:LOCALAPPDATA) {
@@ -240,6 +219,53 @@ if (-not $InstallDir) {
         $InstallDir = Join-Path (Join-Path $HOME '.local/share') 'x4-notifier'
     }
 }
+
+$envFile = Join-Path $InstallDir '.env'
+$existingToken = ''
+if (Test-Path -LiteralPath $envFile) {
+    foreach ($line in Get-Content -LiteralPath $envFile) {
+        if ($line -match '^\s*X4_TOKEN\s*=\s*(.*)$') { $existingToken = $Matches[1].Trim(); break }
+    }
+}
+
+if (-not $Token -and -not $Yes) {
+    if ($existingToken) {
+        $entered = Read-Host 'Shared token for the local server (empty keeps the current one)'
+    } else {
+        $entered = Read-Host 'Shared token for the local server (must match X4_TOKEN in .env, empty for none)'
+    }
+    if ($entered) { $Token = $entered }
+}
+
+# The Lua side and .env must always carry the same token: a leftover template
+# value on one side makes every event fail with 401 and the server logs nothing.
+$effectiveToken = $Token
+if (-not $effectiveToken) { $effectiveToken = $existingToken }
+if ($effectiveToken -and $effectiveToken -notmatch '^[A-Za-z0-9._-]+$') {
+    Write-Warn 'The token has characters the script will not write (allowed: A-Z a-z 0-9 . _ -).'
+    Write-Warn "Set it by hand in $(Join-Path (Join-Path $destination 'ui') 'notifier.lua') and in $envFile"
+    Write-Warn 'Leaving both sides without a token so they still match.'
+    $effectiveToken = ''
+}
+
+$luaPath = Join-Path (Join-Path $destination 'ui') 'notifier.lua'
+$content = Get-Content -LiteralPath $luaPath -Raw
+$content = [regex]::Replace($content, '(?m)^local TOKEN = ".*"$', ('local TOKEN = "{0}"' -f $effectiveToken))
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($luaPath, $content, $utf8)
+if ($effectiveToken) {
+    if ($Token) {
+        Write-Say 'Token: written to ui\notifier.lua'
+    } else {
+        Write-Say 'Token: kept the X4_TOKEN from the existing .env in ui\notifier.lua'
+    }
+} else {
+    Write-Say 'Token: none (both sides empty)'
+}
+
+# --- 5. deploy the server folder -------------------------------------------
+
+Write-Say ''
 Write-Say 'Server folder:'
 Write-Say "  $InstallDir"
 
@@ -262,14 +288,11 @@ if (-not $deployServer) {
     }
     Write-Say 'Server files: copied'
 
-    $envFile   = Join-Path $InstallDir '.env'
     $envSample = Join-Path (Join-Path $root 'bin') '.env.example'
     if (-not (Test-Path -LiteralPath $envFile)) {
         if (Test-Path -LiteralPath $envSample) {
             $lines = Get-Content -LiteralPath $envSample
-            if ($Token) {
-                $lines = $lines -replace '^X4_TOKEN=.*$', ('X4_TOKEN={0}' -f $Token)
-            }
+            $lines = $lines -replace '^X4_TOKEN=.*$', ('X4_TOKEN={0}' -f $effectiveToken)
             $utf8 = New-Object System.Text.UTF8Encoding($false)
             [System.IO.File]::WriteAllLines($envFile, $lines, $utf8)
             Write-Say "Configuration: created $envFile"
@@ -277,10 +300,13 @@ if (-not $deployServer) {
             Write-Warn "bin\.env.example is missing; create $envFile yourself."
         }
     } else {
-        Write-Say "Configuration: kept the existing $envFile"
-        if ($Token) {
-            Write-Warn "make sure X4_TOKEN in $envFile matches the token you entered."
-        }
+        # Only X4_TOKEN is rewritten: the installer just replaced the extension
+        # with a fresh copy, so the two sides have to be brought back in sync.
+        $lines = Get-Content -LiteralPath $envFile
+        $patched = $lines -replace '^(\s*X4_TOKEN\s*=\s*).*$', ('${1}' + $effectiveToken)
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllLines($envFile, $patched, $utf8)
+        Write-Say "Configuration: kept the existing $envFile (X4_TOKEN synced with the extension)"
     }
 }
 

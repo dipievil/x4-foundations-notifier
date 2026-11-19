@@ -207,25 +207,47 @@ say "fleet_notifier: copied to $destination"
 
 # --- 4. optional shared token ----------------------------------------------
 
-if [ -z "$token" ] && [ "$assume_yes" -eq 0 ] && [ -t 0 ]; then
-    say ""
-    read -r -p "Shared token for the local server (must match X4_TOKEN in .env, empty for none): " token || true
+install_dir="${install_dir:-${XDG_DATA_HOME:-$HOME/.local/share}/x4-notifier}"
+env_file="$install_dir/.env"
+
+existing_token=""
+if [ -f "$env_file" ]; then
+    existing_token="$(sed -n 's/^[[:space:]]*X4_TOKEN[[:space:]]*=[[:space:]]*//p' "$env_file" | head -n 1)"
 fi
 
-if [ -n "$token" ]; then
-    if [[ ! "$token" =~ ^[A-Za-z0-9._-]+$ ]]; then
-        warn "The token has characters the script will not write (allowed: A-Z a-z 0-9 . _ -)."
-        warn "Set it by hand in $destination/ui/notifier.lua"
+if [ -z "$token" ] && [ "$assume_yes" -eq 0 ] && [ -t 0 ]; then
+    say ""
+    if [ -n "$existing_token" ]; then
+        read -r -p "Shared token for the local server (empty keeps the current one): " token || true
     else
-        sed -i "s|^local TOKEN = .*|local TOKEN = \"$token\"|" "$destination/ui/notifier.lua"
-        say "Token: written to ui/notifier.lua"
+        read -r -p "Shared token for the local server (must match X4_TOKEN in .env, empty for none): " token || true
     fi
+fi
+
+# The Lua side and .env must always carry the same token: a leftover value on
+# one side makes every event fail with 401 and the server logs nothing.
+effective_token="${token:-$existing_token}"
+if [ -n "$effective_token" ] && [[ ! "$effective_token" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    warn "The token has characters the script will not write (allowed: A-Z a-z 0-9 . _ -)."
+    warn "Set it by hand in $destination/ui/notifier.lua and in $env_file"
+    warn "Leaving both sides without a token so they still match."
+    effective_token=""
+fi
+
+sed -i "s|^local TOKEN = .*|local TOKEN = \"$effective_token\"|" "$destination/ui/notifier.lua"
+if [ -n "$effective_token" ]; then
+    if [ -n "$token" ]; then
+        say "Token: written to ui/notifier.lua"
+    else
+        say "Token: kept the X4_TOKEN from the existing .env in ui/notifier.lua"
+    fi
+else
+    say "Token: none (both sides empty)"
 fi
 
 # --- 5. deploy the server folder -------------------------------------------
 
 say ""
-install_dir="${install_dir:-${XDG_DATA_HOME:-$HOME/.local/share}/x4-notifier}"
 say "Server folder:"
 say "  $install_dir"
 deploy_server=1
@@ -245,19 +267,14 @@ if [ "$deploy_server" -eq 1 ]; then
         warn "$root/bin/x4-notifier-linux-amd64 is missing; copy the binary yourself."
     fi
 
-    env_file="$install_dir/.env"
     if [ -f "$root/bin/.env.example" ] && [ ! -f "$env_file" ]; then
-        if [ -n "$token" ]; then
-            sed "s|^X4_TOKEN=.*|X4_TOKEN=$token|" "$root/bin/.env.example" > "$env_file"
-        else
-            cp "$root/bin/.env.example" "$env_file"
-        fi
+        sed "s|^X4_TOKEN=.*|X4_TOKEN=$effective_token|" "$root/bin/.env.example" > "$env_file"
         say "Configuration: created $env_file"
     elif [ -f "$env_file" ]; then
-        say "Configuration: kept the existing $env_file"
-        if [ -n "$token" ]; then
-            warn "make sure X4_TOKEN in $env_file matches the token you entered."
-        fi
+        # Only X4_TOKEN is rewritten: the installer just replaced the extension
+        # with a fresh copy, so the two sides have to be brought back in sync.
+        sed -i "s|^[[:space:]]*X4_TOKEN[[:space:]]*=.*|X4_TOKEN=$effective_token|" "$env_file"
+        say "Configuration: kept the existing $env_file (X4_TOKEN synced with the extension)"
     else
         warn "bin/.env.example is missing; create $env_file yourself."
     fi
