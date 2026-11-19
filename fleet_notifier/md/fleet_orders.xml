@@ -4,54 +4,119 @@
   <cues>
 
     <!--
-      Fleet roster.
-
-      event_object_order_finished needs a source: a single object or an MD
-      group. $FleetShips holds every player-owned ship in the galaxy and is
-      rebuilt every 5 minutes so ships built or captured later are included.
+      Legacy shell. Earlier versions kept the fleet roster and the order
+      listener under this cue. It stays in place, empty, because MD refuses to
+      remove a parent cue that still owns children in an existing savegame:
+      with the parent present, the old children are dropped cleanly.
     -->
-    <cue name="FleetNotifier_TrackFleet" instantiate="true" checkinterval="5min" namespace="this">
-      <conditions>
-        <check_value value="true" />
-      </conditions>
+    <cue name="FleetNotifier_TrackFleet" namespace="this" />
+
+    <!--
+      Watches the current order of every player ship and reports an order the
+      moment it stops being the current one, which is what "the order
+      finished" looks like from outside the AI script.
+
+      Polling is deliberate. event_object_order_finished needs a source group,
+      and a group held in a cue variable is not rebuilt when the cue that
+      created it is already completed in the savegame; the listener then ends
+      up subscribed to nothing. This cue only reads live ship state, so it is
+      unaffected by what the savegame remembers.
+
+      Filters, so default behaviour does not spam:
+        - the previous order was not the ship's default order (AutoTrade,
+          Patrol, ... keep running and changing name),
+        - the previous order was not temporary (the engine's own Undock and
+          similar orders that appear for a moment when a new order starts).
+    -->
+    <cue name="FleetNotifier_Watch" namespace="this">
+      <delay exact="3s" />
       <actions>
-        <create_group groupname="$FleetShips" />
-        <find_object space="player.galaxy" class="class.ship" owner="faction.player"
-                     multiple="true" groupname="$FleetShips" />
+        <find_ship name="$Ships" space="player.galaxy" owner="faction.player" multiple="true" />
+
+        <!-- First run in a session: nothing seen yet, so nothing is reported. -->
+        <do_if value="not $SeenIds?">
+          <set_value name="$SeenIds" exact="table[]" />
+          <set_value name="$SeenNames" exact="table[]" />
+          <set_value name="$SeenTemporary" exact="table[]" />
+          <debug_text text="'FleetNotifier: watcher started, %s ships'.[$Ships.count]" />
+        </do_if>
+
+        <do_for_each name="$Ship" in="$Ships">
+          <set_value name="$DefaultId" exact="'none'" />
+          <do_if value="$Ship.defaultorder">
+            <do_if value="$Ship.defaultorder.id">
+              <set_value name="$DefaultId" exact="$Ship.defaultorder.id" />
+            </do_if>
+          </do_if>
+
+          <!--
+            Never store null: the order of an idle ship can report a null id
+            or name, and MD treats null != null as true, which compared as
+            "the order changed" on every pass.
+          -->
+          <set_value name="$OrderId" exact="'none'" />
+          <set_value name="$OrderName" exact="'none'" />
+          <set_value name="$OrderTemporary" exact="false" />
+          <do_if value="$Ship.order">
+            <do_if value="$Ship.order.id">
+              <set_value name="$OrderId" exact="$Ship.order.id" />
+              <set_value name="$OrderName" exact="$Ship.order.id" />
+              <do_if value="$Ship.order.name">
+                <set_value name="$OrderName" exact="$Ship.order.name" />
+              </do_if>
+              <set_value name="$OrderTemporary" exact="$Ship.order.istemporary" />
+            </do_if>
+          </do_if>
+
+          <!--
+            Table keys: a plain string key must start with '$' in MD, so an
+            idcode like 'AIX-262' is rejected as a key. Keying on the ship
+            component works and is what vanilla scripts do, e.g.
+            $AttackingShipMarineTierAmounts.{$ship}.
+          -->
+          <do_if value="$SeenIds.{$Ship}?">
+            <set_value name="$PreviousId" exact="$SeenIds.{$Ship}" />
+            <set_value name="$PreviousName" exact="$SeenNames.{$Ship}" />
+            <set_value name="$PreviousTemporary" exact="$SeenTemporary.{$Ship}" />
+
+            <do_if value="$PreviousId != 'none' and $PreviousId != $DefaultId and not $PreviousTemporary">
+              <!--
+                Report only when the ship went back to idle (no order) or to
+                its default order: that is the moment the order really ended.
+                A queued follow-up order means the finished one was not last.
+              -->
+              <do_if value="$OrderId == 'none' or $OrderId == $DefaultId">
+                <set_value name="$ShipName" exact="$Ship.knownname" />
+
+                <set_value name="$SectorName" exact="'Unknown sector'" />
+                <do_if value="$Ship.sector">
+                  <set_value name="$SectorName" exact="$Ship.sector.knownname" />
+                </do_if>
+
+                <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$Ship.idcode, $ShipName, $PreviousName, $SectorName]" />
+
+                <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" />
+                <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
+              </do_if>
+            </do_if>
+          </do_if>
+
+          <set_value name="$SeenIds.{$Ship}" exact="$OrderId" />
+          <set_value name="$SeenNames.{$Ship}" exact="$OrderName" />
+          <set_value name="$SeenTemporary.{$Ship}" exact="$OrderTemporary" />
+        </do_for_each>
+
+        <reset_cue cue="FleetNotifier_Watch" />
       </actions>
     </cue>
 
-    <!--
-      One notification per finished order.
-
-      Default loop orders (AutoTrade, AutoMine, Patrol, ...) finish constantly
-      and are skipped by the isdefault check. Do not remove it.
-    -->
-    <cue name="FleetNotifier_OrderFinished" instantiate="true" namespace="this">
+    <!-- Reports every game load, so debuglog shows the script is alive. -->
+    <cue name="FleetNotifier_Boot" instantiate="true">
       <conditions>
-        <event_object_order_finished group="$FleetShips" />
-        <check_value value="event.object.owner == faction.player" />
-        <check_value value="not event.param.isdefault" />
+        <event_game_loaded />
       </conditions>
       <actions>
-        <set_value name="$ShipName" exact="event.object.knownname" />
-        <set_value name="$ShipCode" exact="event.object.idcode" />
-
-        <set_value name="$SectorName" exact="'Unknown sector'" />
-        <do_if value="event.object.sector">
-          <set_value name="$SectorName" exact="event.object.sector.knownname" />
-        </do_if>
-
-        <!-- event.param is the finished order; the engine may already have dropped it. -->
-        <set_value name="$OrderName" exact="'Unknown order'" />
-        <do_if value="event.param">
-          <set_value name="$OrderName" exact="event.param.name" />
-        </do_if>
-
-        <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$ShipCode, $ShipName, $OrderName, $SectorName]" />
-
-        <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" filter="general" />
-        <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
+        <raise_lua_event name="'FleetNotifier.Ping'" param="'game_loaded'" />
       </actions>
     </cue>
 

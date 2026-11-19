@@ -3,7 +3,7 @@
          name="Fleet Order Notifier"
          description="Sends LAN push notifications (ntfy / Telegram) when a fleet ship finishes an order."
          author="Diego"
-         version="101"
+         version="102"
          date="2026-11-19"
          save="0">
   <dependency id="djfhe_http" optional="false" />

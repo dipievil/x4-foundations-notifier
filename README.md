@@ -6,7 +6,7 @@ Sends a push notification to your phone (ntfy, Gotify or Telegram) when a ship i
 X4 (Windows)                                   same machine
 ┌──────────────────────────────┐
 │ md/fleet_orders.xml          │  raise_lua_event  ┌─────────────────────┐
-│ event_object_order_finished  │ ────────────────► │ ui/notifier.lua     │
+│ polls ship.order every 3 s   │ ────────────────► │ ui/notifier.lua     │
 └──────────────────────────────┘                   │ (menus env, x4_http)│
                                                    └─────────┬───────────┘
                                                              │ HTTP POST json
@@ -170,11 +170,11 @@ The server trims and caps every field, logs the event, answers `202` and dispatc
 
 **`rejected request ... token mismatch` in the server window (or `401` in the Lua log).** `TOKEN` in `notifier.lua` and `X4_TOKEN` in `.env` differ. Either leave both empty or give them the same value, then restart the server **and X4**.
 
-**The mod fires for the ship I fly, but not for my fleet.** The roster cue rebuilds `$FleetShips` every 5 minutes and at load. A ship built in the last few minutes may need one refresh cycle; check the log for events after that.
+**The mod fires for one ship but not for another.** The MD side scans every player-owned ship every 3 seconds, so a ship built or bought is picked up within one cycle. `debuglog.txt` shows `FleetNotifier: watcher started, <n> ships` once per session — if that number is lower than your fleet, the ships are not player-owned or not in the player's galaxy.
 
-**Way too many notifications.** Orders created by loop behaviours (AutoTrade, AutoMine, Patrol) finish constantly. The `not event.param.isdefault` check in `md/fleet_orders.xml` is what suppresses them — do not remove it. If a modded loop order still spams you, extend that check.
+**Way too many notifications.** Loop behaviours (AutoTrade, AutoMine, Patrol) and the engine's own temporary orders (Undock and similar) are skipped on purpose in `md/fleet_orders.xml`. If a modded loop order still spams you, extend the filters inside `FleetNotifier_Watch`.
 
-**`unknown order` in the notification.** The engine is allowed to drop `event.param` before the cue handles it. The code falls back to a placeholder instead of erroring.
+**The notification shows an order code instead of a name.** The order has no localized name available to the script, so the fallback prints its id (`DockAt`, `MoveWait`, ...).
 
 **The server window closes instantly.** It only stays open while running; `start-x4-notifier.bat` adds the final pause. If it closes before that, the port is probably already in use by another copy.
 
@@ -197,7 +197,7 @@ fleet_notifier/              X4 extension (copy into extensions/)
   content.xml                id, version, dependency on djfhe_http
   ui.xml                     UI manifest, must live at the extension root
   ui/notifier.lua            menus-environment Lua, sends the HTTP request
-  md/fleet_orders.xml        fleet roster + order-finished listener
+  md/fleet_orders.xml        polls ship.order, raises one Lua event per finished order
 bin/                         released server binaries, ready to run
   x4-notifier-windows-amd64.exe
   x4-notifier-linux-amd64

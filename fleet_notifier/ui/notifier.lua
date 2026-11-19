@@ -22,11 +22,23 @@ local function log(msg)
     DebugError("[FleetNotifier] " .. tostring(msg))
 end
 
-local loaded, Request = pcall(require, "djfhe.http.request")
-if not loaded then
-    -- djfhe_http missing or disabled: stay quiet instead of breaking the UI.
-    log("djfhe_http is not available, no notifications will be sent (" .. tostring(Request) .. ")")
-    return
+-- djfhe_http sets package.path when its own lua file is loaded. Extension load
+-- order is not guaranteed, so resolve it on first use instead of at load time.
+local Request
+
+local function getRequest()
+    if Request then
+        return Request
+    end
+
+    local ok, mod = pcall(require, "djfhe.http.request")
+    if not ok then
+        log("djfhe_http is not available, no notifications will be sent (" .. tostring(mod) .. ")")
+        return nil
+    end
+
+    Request = mod
+    return Request
 end
 
 local function splitFields(text)
@@ -38,6 +50,8 @@ local function splitFields(text)
 end
 
 local function onOrderFinished(_, param)
+    log("order finished event: " .. tostring(param))
+
     if type(param) ~= "string" or param == "" then
         return
     end
@@ -55,7 +69,12 @@ local function onOrderFinished(_, param)
         return
     end
 
-    local request = Request.new("POST"):setUrl(ENDPOINT):setBody(payload)
+    local requestModule = getRequest()
+    if not requestModule then
+        return
+    end
+
+    local request = requestModule.new("POST"):setUrl(ENDPOINT):setBody(payload)
     if TOKEN ~= "" then
         request:addHeader("Authorization", "Bearer " .. TOKEN)
     end
@@ -74,7 +93,20 @@ local function onOrderFinished(_, param)
     end)
 end
 
+-- Handshake from the MD script: proves the MD -> Lua path works even when no
+-- order is given. Shows up in debuglog.txt as "Ping".
+local function onPing(_, param)
+    log("Ping from MD: " .. tostring(param))
+end
+
 local ok, err = pcall(RegisterEvent, "FleetNotifier.OrderFinished", onOrderFinished)
 if not ok then
-    log("RegisterEvent failed: " .. tostring(err))
+    log("RegisterEvent(OrderFinished) failed: " .. tostring(err))
 end
+
+local okPing, errPing = pcall(RegisterEvent, "FleetNotifier.Ping", onPing)
+if not okPing then
+    log("RegisterEvent(Ping) failed: " .. tostring(errPing))
+end
+
+log("ui loaded")

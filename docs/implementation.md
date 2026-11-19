@@ -7,8 +7,9 @@ Mission Director side still needs a test pass per game update.
 ## Pipeline
 
 ```
-event_object_order_finished   (MD, per ship in $FleetShips)
-        │  filters: owner == faction.player, not event.param.isdefault
+FleetNotifier_Watch            (MD, every 3 s)
+        │  find_ship: every player ship
+        │  compare ship.order with the previous sample
         ▼
 raise_lua_event "FleetNotifier.OrderFinished"  (one string)
         │  "shipcode|shipname|ordername|sectorname"
@@ -53,32 +54,54 @@ The same reason explains the Lua split function instead of a JSON string built
 in MD: the Lua side builds a table and lets `x4_http` encode it, which removes
 every escaping bug at once.
 
-## Why the event needs a group source
+## Why the order is polled instead of listened to
 
-`event_object_order_finished` takes a source filter: `object` (one object),
-`group` (an MD group, membership may change) or `order` (order definition). A cue
-with no source has nothing to subscribe to.
+`event_object_order_finished` exists, but it needs a source: `object` (one
+object) or `group` (an MD group). Either one has to exist when the cue sets the
+event up.
 
-The tempting filter, `object="player.ship"`, means the ship the player is
-piloting, so a fleet would never trigger. Instead `FleetNotifier_TrackFleet`
-rebuilds `$FleetShips` with `find_object ... space="player.galaxy"
-class="class.ship" owner="faction.player" multiple="true" groupname="$FleetShips"`
-every 5 minutes, and the listener subscribes with `group="$FleetShips"`.
+A group is built by a cue's actions, and cue state lives in the savegame. Once
+that cue has completed, its actions do not run again when the save is loaded,
+and the group is not there any more — the listener then subscribes to nothing,
+silently. The first version rebuilt `$FleetShips` that way and stopped
+reporting after one save/load cycle; the debuglog showed
+`Property lookup failed: $FleetShips` and `Evaluated value 'null' is not of
+type group`.
 
-## Why loop orders are filtered
+Polling reads live ship state instead: `find_ship ... owner="faction.player"`
+every 3 s, then `ship.order` for each ship. Nothing in the mechanism depends on
+what the savegame remembers, so it survives loads, new ships and script
+updates.
 
-`event.param` is the finished order. Orders from loop behaviours — AutoTrade,
-AutoMine, Patrol, Escort — finish every cycle, so `not event.param.isdefault`
-is what separates "a command I gave" from "the loop turned over again". Removing
-that check turns the notifier into a firehose.
+## What counts as a finished order
 
-## `event.param` lifetime
+The cue keeps the last order id, name and temporary flag per ship and reports
+when the ship goes back to idle (no order) or to its default order.
+`ship.order` returns the queued order while one runs and the default order once
+the queue is empty, so that transition is the reliable "the order ended"
+moment.
 
-The event documentation states that the finished order "may no longer exist when
-handled". Reading `event.param.name` can therefore yield null, so the action
-blocks set a placeholder first and only overwrite it inside
-`<do_if value="event.param">`. The notification then says `Unknown order`
-instead of failing the cue.
+What is skipped, to keep the phone quiet:
+
+- the previous order was the default order (AutoTrade, Patrol...): those loop
+  forever and would otherwise flood the phone;
+- the previous order was temporary (the engine's own Undock and similar
+  orders that appear for a moment when a new order starts);
+- a queued follow-up order means the finished one was not the last, so only
+  the last order of a queue is reported.
+
+## Two MD traps this design avoids
+
+- **Table keys are not arbitrary strings.** A string key has to start with `$`
+  (`table[$foo = 1]` or `table[{'$foo'} = 1]`). Keying by idcode
+  (`$Seen.{$idcode}`) fails at runtime: writes error out and reads return
+  null, which also looks like "no previous order" and silently disables the
+  whole comparison. Keying by the ship component (`$Seen.{$Ship}`) is what
+  vanilla scripts do, for example `$AttackingShipMarineTierAmounts.{$ship}`.
+- **`null != null` is true.** An idle ship can report a null order id or name.
+  Comparing null with null makes "did the order change?" true on every pass,
+  which produced one notification every 3 s. Every stored value is a string or
+  a boolean, never null.
 
 ## Protected UI Mode
 
@@ -123,7 +146,8 @@ others.
 
 ## References
 
-- [event_object_order_finished](https://x4wiki.com/en/pages/api-mdevent-event-object-order-finished-6bcd7797) — event fields and subscription filters
+- [Mission Director Guide](https://wiki.egosoft.com/X%20Rebirth%20Wiki/Modding%20support/Mission%20Director%20Guide) — expressions, lists, tables and the table-key rules, variables and namespaces
+- [event_object_order_finished](https://x4wiki.com/en/pages/api-mdevent-event-object-order-finished-6bcd7797) — the event this design replaced, and why it needs a source
 - [groupeventsource](https://x4wiki.com/en/pages/schema-groupeventsource-6492ab7b) — group source semantics
 - [Talking with MD and AI scripts](https://chemodun.github.io/x4/modding-support/ui-modding/talking-with-md-and-ai-scripts) — `raise_lua_event`, `RegisterEvent`, what survives the crossing
 - [Anatomy of an extension](https://chemodun.github.io/x4/modding-support/anatomy-of-an-extension/) — `content.xml`, `ui.xml`, dependencies, packaging
