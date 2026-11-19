@@ -1,6 +1,6 @@
 # x4-foundations-notifier
 
-Sends a push notification to your phone (ntfy or Telegram) when a ship in your X4: Foundations fleet finishes an order.
+Sends a push notification to your phone (ntfy, Gotify or Telegram) when a ship in your X4: Foundations fleet finishes an order.
 
 ```
 X4 (Windows)                                   same machine
@@ -16,7 +16,7 @@ X4 (Windows)                                   same machine
                                                    └─────────┬───────────┘
                                                              │
                                               ┌──────────────┴──────────────┐
-                                        ntfy.sh                        Telegram Bot API
+                                  ntfy.sh   Gotify   Telegram Bot API
 ```
 
 Nothing blocks the game loop: the Lua side fires an asynchronous HTTP request and the server answers immediately, before it talks to the providers.
@@ -30,7 +30,7 @@ The server binaries are already in `bin/`. They are self-contained — no Go, no
 1. Download the repository (Code → Download ZIP) and extract it.
 2. Copy the `fleet_notifier` folder into `...\X4 Foundations\extensions\fleet_notifier`.
 3. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
-4. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC` and/or the two Telegram values.
+4. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values.
 5. Open `X4 Foundations\extensions\fleet_notifier\ui\notifier.lua` and put the same token in `local TOKEN = "..."` (or leave both empty).
 6. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
 7. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
@@ -45,13 +45,13 @@ cp .env.example .env      # then edit .env
 ./x4-notifier-linux-amd64
 ```
 
-Either way, `curl http://127.0.0.1:8080/health` should answer with `"status":"ok"` and the binary version.
+Either way, `curl http://127.0.0.1:47100/health` should answer with `"status":"ok"` and the binary version.
 
 ## Requirements
 
 - X4: Foundations, with **Protected UI Mode disabled** (Settings → Game Settings). `djfhe_http` loads native DLLs, so it cannot run in protected mode.
 - [djfhe/x4_http](https://github.com/djfhe/x4_http) installed in `extensions/djfhe_http`. It is a hard dependency in `content.xml`; the extension refuses to load without it.
-- An ntfy topic and/or a Telegram bot (bot token from @BotFather, chat id from @userinfobot).
+- An ntfy topic, a [Gotify](https://gotify.net) server with an application token, and/or a Telegram bot (bot token from @BotFather, chat id from @userinfobot).
 
 Building the server yourself is optional; see [Building from source](#building-from-source).
 
@@ -69,22 +69,27 @@ The server reads a `.env` file from the folder it is started in, and then the en
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `X4_LISTEN` | `127.0.0.1:8080` | Bind address. Use `0.0.0.0:8080` only if the game runs on another machine. |
+| `X4_LISTEN` | `127.0.0.1:47100` | Bind address. Use `0.0.0.0:47100` only if the game runs on another machine. |
 | `X4_TOKEN` | empty | Shared secret. Must match `TOKEN` in `notifier.lua`. Empty means unauthenticated. |
 | `NTFY_URL` | `https://ntfy.sh` | ntfy base URL, for a self-hosted instance too. |
 | `NTFY_TOPIC` | empty | ntfy topic. Empty disables ntfy. |
 | `NTFY_TOKEN` | empty | ntfy access token, for protected topics. |
+| `GOTIFY_URL` | empty | Gotify base URL, e.g. `https://gotify.example.com`. Needs the token too. |
+| `GOTIFY_TOKEN` | empty | Gotify application token; sent as `X-Gotify-Key`, never in the URL. |
+| `GOTIFY_PRIORITY` | `5` | Gotify message priority, -2 to 10. |
 | `TELEGRAM_BOT_TOKEN` | empty | Bot token from @BotFather. |
 | `TELEGRAM_CHAT_ID` | empty | Chat that receives the messages. |
 | `TELEGRAM_API_BASE` | `https://api.telegram.org` | Override for tests or a proxy. |
+
+The port is `47100` rather than `8080` on purpose: `8080` is the default for web servers, proxies and dev tools, and this server should never fight with them. If you already set `X4_LISTEN`, nothing changes for you.
 
 Both providers can be enabled at once. With neither set the server still runs and accepts events — it just logs them.
 
 ## Test it
 
 ```
-curl -i http://127.0.0.1:8080/health
-curl -i -X POST http://127.0.0.1:8080/x4/order-finished \
+curl -i http://127.0.0.1:47100/health
+curl -i -X POST http://127.0.0.1:47100/x4/order-finished \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer change-me' \
   -d '{"code":"ABC-123","ship":"Argon Titan","order":"DockAt","sector":"Argon Prime"}'
@@ -152,7 +157,7 @@ bin/                         released server binaries, ready to run
   start-x4-notifier.bat      Windows launcher, reads .env from the same folder
   .env.example               configuration template
 go_server/
-  main.go                    HTTP server, ntfy + Telegram dispatch
+  main.go                    HTTP server, ntfy + Gotify + Telegram dispatch
   dotenv.go                  .env loader
   *_test.go                  tests, providers behind httptest
   .env.example               same template, for running from source
@@ -163,6 +168,6 @@ docs/implementation.md       design notes and X4 modding gotchas
 
 ## Caveats
 
-- The ntfy topic is only as private as the topic name; use a long random one or a token.
+- The ntfy topic is only as private as the topic name; use a long random one or a token. Gotify and Telegram authenticate per request, so their secrets are the credentials.
 - The endpoint is plain HTTP on localhost by design. If you move the server to another host, put it behind TLS or a VPN — with no `X4_TOKEN` anyone on the LAN can trigger notifications.
 - The mod is verified against the X4 9.00 modding docs, not yet in-game for every order type. The MD scripts are the part to re-check after a game update.

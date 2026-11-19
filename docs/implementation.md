@@ -18,7 +18,7 @@ RegisterEvent handler in ui/notifier.lua  (menus Lua environment)
         ▼
 go_server /x4/order-finished   (auth, validation, 202 at once)
         ▼
-ntfy + Telegram, in the background
+ntfy + Gotify + Telegram, in the background
 ```
 
 ## Why `ui.xml` sits at the extension root
@@ -94,7 +94,8 @@ intact instead of throwing at load time.
 
 Configuration is read from `.env` in the working directory, then from the
 environment (a shell export wins), so a shipped binary is configured by editing
-one file. The binary is built with `scripts/build-release.sh`, which stamps the
+one file. The default listener is `127.0.0.1:47100`; the port avoids `8080`,
+which belongs to every web server and dev tool on a normal machine. The binary is built with `scripts/build-release.sh`, which stamps the
 version into `main.version` (`-X main.version=...`) so `/health` and the startup
 log name the build.
 
@@ -114,7 +115,11 @@ log name the build.
 Telegram is sent without `parse_mode` on purpose: ship names contain `_` and `*`,
 and both Markdown flavors reject them with a 400. ntfy is published with a JSON
 body rather than headers, which keeps the accented title (`Ordem concluída`)
-intact.
+intact. Gotify takes a JSON body too (`title`, `message`, `priority`) and the
+application token as `X-Gotify-Key`, not the `?token=` query parameter, so the
+secret never lands in a URL or a proxy log. Providers are independent: each one
+that is configured is attempted, and a failure is logged without affecting the
+others.
 
 ## References
 

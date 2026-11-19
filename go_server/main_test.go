@@ -12,6 +12,7 @@ import (
 )
 
 type capturedRequest struct {
+	path   string
 	header http.Header
 	body   []byte
 }
@@ -22,7 +23,7 @@ func fakeProvider(t *testing.T) (*httptest.Server, <-chan capturedRequest) {
 	ch := make(chan capturedRequest, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		ch <- capturedRequest{header: r.Header.Clone(), body: body}
+		ch <- capturedRequest{path: r.URL.Path, header: r.Header.Clone(), body: body}
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
@@ -175,8 +176,60 @@ func TestProviderErrorsAreNotFatal(t *testing.T) {
 	}
 }
 
+func TestDispatchSendsGotify(t *testing.T) {
+	gotifySrv, gotifyCh := fakeProvider(t)
+
+	n := testNotifier(config{
+		gotifyURL:      gotifySrv.URL,
+		gotifyToken:    "gotify-app-token",
+		gotifyPriority: 7,
+	})
+
+	if rec := post(t, n.routes(), `{"ship":"Titan","order":"DockAt","sector":"Argon Prime"}`, nil); rec.Code != http.StatusAccepted {
+		t.Fatalf("got %d, want 202", rec.Code)
+	}
+
+	got := waitFor(t, gotifyCh)
+	if got.path != "/message" {
+		t.Errorf("gotify path: got %q, want /message", got.path)
+	}
+	if got.header.Get("X-Gotify-Key") != "gotify-app-token" {
+		t.Errorf("gotify token header: got %q", got.header.Get("X-Gotify-Key"))
+	}
+	var payload struct {
+		Title    string `json:"title"`
+		Message  string `json:"message"`
+		Priority int    `json:"priority"`
+	}
+	if err := json.Unmarshal(got.body, &payload); err != nil {
+		t.Fatalf("gotify payload is not json: %v", err)
+	}
+	if payload.Priority != 7 {
+		t.Errorf("gotify priority: got %d, want 7", payload.Priority)
+	}
+	if !strings.Contains(payload.Title, "Titan") || !strings.Contains(payload.Message, "Argon Prime") {
+		t.Errorf("gotify content: %q / %q", payload.Title, payload.Message)
+	}
+}
+
+func TestGotifyNeedsURLAndToken(t *testing.T) {
+	cases := []config{
+		{gotifyURL: "http://gotify.local"},
+		{gotifyToken: "token"},
+		{},
+	}
+	for _, cfg := range cases {
+		if cfg.gotifyEnabled() {
+			t.Errorf("gotify enabled with %+v", cfg)
+		}
+	}
+	if !(config{gotifyURL: "http://gotify.local", gotifyToken: "t"}).gotifyEnabled() {
+		t.Error("gotify should be enabled with url and token")
+	}
+}
+
 func TestHealth(t *testing.T) {
-	n := testNotifier(config{token: "x", ntfyTopic: "x4", telegramToken: "t", telegramChat: "1"})
+	n := testNotifier(config{token: "x", ntfyTopic: "x4", gotifyURL: "http://g", gotifyToken: "t", telegramToken: "t", telegramChat: "1"})
 	rec := httptest.NewRecorder()
 	n.routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 
@@ -187,13 +240,16 @@ func TestHealth(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &health); err != nil {
 		t.Fatalf("health is not json: %v", err)
 	}
-	for _, key := range []string{"status", "ntfy", "telegram", "auth"} {
+	for _, key := range []string{"status", "version", "ntfy", "gotify", "telegram", "auth"} {
 		if _, ok := health[key]; !ok {
 			t.Errorf("health missing %q", key)
 		}
 	}
 	if health["status"] != "ok" {
 		t.Errorf("status: got %v", health["status"])
+	}
+	if health["gotify"] != true {
+		t.Errorf("gotify: got %v, want true", health["gotify"])
 	}
 }
 

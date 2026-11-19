@@ -13,7 +13,7 @@
 
 -- Go server address. It runs on the machine that runs X4, so 127.0.0.1 is
 -- correct; use the LAN address if you move the server to another host.
-local ENDPOINT = "http://127.0.0.1:8080/x4/order-finished"
+local ENDPOINT = "http://127.0.0.1:47100/x4/order-finished"
 
 -- Must match X4_TOKEN on the server. Leave "" when X4_TOKEN is not set.
 local TOKEN = ""

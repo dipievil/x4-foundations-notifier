@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,30 +39,39 @@ type OrderEvent struct {
 }
 
 type config struct {
-	listen        string
-	token         string
-	ntfyURL       string
-	ntfyTopic     string
-	ntfyToken     string
-	telegramBase  string
-	telegramToken string
-	telegramChat  string
+	listen         string
+	token          string
+	ntfyURL        string
+	ntfyTopic      string
+	ntfyToken      string
+	gotifyURL      string
+	gotifyToken    string
+	gotifyPriority int
+	telegramBase   string
+	telegramToken  string
+	telegramChat   string
 }
 
 func loadConfig() config {
 	return config{
-		listen:        envOrDefault("X4_LISTEN", "127.0.0.1:8080"),
-		token:         os.Getenv("X4_TOKEN"),
-		ntfyURL:       strings.TrimRight(envOrDefault("NTFY_URL", "https://ntfy.sh"), "/"),
-		ntfyTopic:     os.Getenv("NTFY_TOPIC"),
-		ntfyToken:     os.Getenv("NTFY_TOKEN"),
-		telegramBase:  strings.TrimRight(envOrDefault("TELEGRAM_API_BASE", "https://api.telegram.org"), "/"),
-		telegramToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		telegramChat:  os.Getenv("TELEGRAM_CHAT_ID"),
+		listen:         envOrDefault("X4_LISTEN", "127.0.0.1:47100"),
+		token:          os.Getenv("X4_TOKEN"),
+		ntfyURL:        strings.TrimRight(envOrDefault("NTFY_URL", "https://ntfy.sh"), "/"),
+		ntfyTopic:      os.Getenv("NTFY_TOPIC"),
+		ntfyToken:      os.Getenv("NTFY_TOKEN"),
+		gotifyURL:      strings.TrimRight(os.Getenv("GOTIFY_URL"), "/"),
+		gotifyToken:    os.Getenv("GOTIFY_TOKEN"),
+		gotifyPriority: envInt("GOTIFY_PRIORITY", 5),
+		telegramBase:   strings.TrimRight(envOrDefault("TELEGRAM_API_BASE", "https://api.telegram.org"), "/"),
+		telegramToken:  os.Getenv("TELEGRAM_BOT_TOKEN"),
+		telegramChat:   os.Getenv("TELEGRAM_CHAT_ID"),
 	}
 }
 
 func (c config) ntfyEnabled() bool { return c.ntfyTopic != "" }
+
+func (c config) gotifyEnabled() bool { return c.gotifyURL != "" && c.gotifyToken != "" }
+
 func (c config) telegramEnabled() bool {
 	return c.telegramToken != "" && c.telegramChat != ""
 }
@@ -69,6 +79,15 @@ func (c config) telegramEnabled() bool {
 func envOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }
@@ -131,6 +150,7 @@ func (n *notifier) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":   "ok",
 		"version":  version,
 		"ntfy":     n.cfg.ntfyEnabled(),
+		"gotify":   n.cfg.gotifyEnabled(),
 		"telegram": n.cfg.telegramEnabled(),
 		"auth":     n.cfg.token != "",
 	})
@@ -163,6 +183,11 @@ func (n *notifier) dispatch(event OrderEvent) {
 	if n.cfg.ntfyEnabled() {
 		if err := n.sendNtfy(ctx, title, body); err != nil {
 			n.logger.Printf("ntfy: %v", err)
+		}
+	}
+	if n.cfg.gotifyEnabled() {
+		if err := n.sendGotify(ctx, title, body); err != nil {
+			n.logger.Printf("gotify: %v", err)
 		}
 	}
 	if n.cfg.telegramEnabled() {
@@ -213,6 +238,29 @@ func (n *notifier) sendNtfy(ctx context.Context, title, body string) error {
 	}
 
 	return n.do(req, "ntfy")
+}
+
+func (n *notifier) sendGotify(ctx context.Context, title, body string) error {
+	payload := map[string]any{
+		"title":    title,
+		"message":  body,
+		"priority": n.cfg.gotifyPriority,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.cfg.gotifyURL+"/message", bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Header instead of the ?token= query parameter, so the token stays out of
+	// URLs and proxy logs.
+	req.Header.Set("X-Gotify-Key", n.cfg.gotifyToken)
+
+	return n.do(req, "gotify")
 }
 
 func (n *notifier) sendTelegram(ctx context.Context, title, body string) error {
@@ -295,8 +343,8 @@ func main() {
 	cfg := loadConfig()
 	n := newNotifier(cfg, logger)
 
-	if !cfg.ntfyEnabled() && !cfg.telegramEnabled() {
-		logger.Print("warning: no provider configured; set NTFY_TOPIC and/or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID")
+	if !cfg.ntfyEnabled() && !cfg.gotifyEnabled() && !cfg.telegramEnabled() {
+		logger.Print("warning: no provider configured; set NTFY_TOPIC, GOTIFY_URL + GOTIFY_TOKEN, and/or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID")
 	}
 	if cfg.token == "" {
 		logger.Print("warning: X4_TOKEN is empty, the endpoint accepts any request")
@@ -322,8 +370,8 @@ func main() {
 	}()
 
 	logger.Printf("x4-notifier %s", version)
-	logger.Printf("listening on http://%s (ntfy=%t telegram=%t auth=%t)",
-		cfg.listen, cfg.ntfyEnabled(), cfg.telegramEnabled(), cfg.token != "")
+	logger.Printf("listening on http://%s (ntfy=%t gotify=%t telegram=%t auth=%t)",
+		cfg.listen, cfg.ntfyEnabled(), cfg.gotifyEnabled(), cfg.telegramEnabled(), cfg.token != "")
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatalf("server: %v", err)
