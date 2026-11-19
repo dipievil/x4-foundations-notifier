@@ -49,7 +49,7 @@ Either way, `curl http://127.0.0.1:47100/health` should answer with `"status":"o
 
 - X4: Foundations, with **Protected UI Mode disabled** (Settings → Game Settings). `djfhe_http` loads native DLLs, so it cannot run in protected mode.
 - [djfhe/x4_http](https://github.com/djfhe/x4_http) installed in `extensions/djfhe_http`. It is a hard dependency in `content.xml`; the extension refuses to load without it.
-- An ntfy topic, a [Gotify](https://gotify.net) server with an application token, and/or a Telegram bot (bot token from @BotFather, chat id from @userinfobot). Step-by-step setup for each: [docs/notification-apps-guide.md](docs/notification-apps-guide.md).
+- An ntfy topic, a [Gotify](https://gotify.net) server with an application token, and/or a [Telegram](https://telegram.org/) bot (bot token from @BotFather, chat id from @userinfobot). Step-by-step setup for each: [docs/notification-apps-guide.md](docs/notification-apps-guide.md).
 
 Building the server yourself is optional; see [Building from source](#building-from-source).
 
@@ -188,7 +188,7 @@ make build                 # dev binary in dist/
 make release               # bin/x4-notifier-windows-amd64.exe + bin/x4-notifier-linux-amd64
 ```
 
-`make release` stamps the version from the git tag/commit; set `VERSION=1.0.0` to override (the shipped binaries say `1.0.0`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
+`make release` stamps the version from the git tag/commit; set `VERSION=1.1.1` to override (the shipped binaries say `1.1.1`, visible in `/health` and the startup log). `make mod-package` rebuilds `dist/fleet_notifier.zip`.
 
 ## Layout
 

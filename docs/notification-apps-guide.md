@@ -131,7 +131,7 @@ Start the server and look at its window:
 
 ```
 configuration loaded from .env
-x4-notifier 1.1.0
+x4-notifier 1.1.1
 listening on http://127.0.0.1:47100 (ntfy=false gotify=true telegram=false auth=true)
 ```
 
