@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mdscript name="Fleet_Order_Notifier" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="md.xsd">
+  <cues>
+
+    <!--
+      Fleet roster.
+
+      event_object_order_finished needs a source: a single object or an MD
+      group. $FleetShips holds every player-owned ship in the galaxy and is
+      rebuilt every 5 minutes so ships built or captured later are included.
+    -->
+    <cue name="FleetNotifier_TrackFleet" instantiate="true" checkinterval="5min" namespace="this">
+      <conditions>
+        <check_value value="true" />
+      </conditions>
+      <actions>
+        <create_group groupname="$FleetShips" />
+        <find_object space="player.galaxy" class="class.ship" owner="faction.player"
+                     multiple="true" groupname="$FleetShips" />
+      </actions>
+    </cue>
+
+    <!--
+      One notification per finished order.
+
+      Default loop orders (AutoTrade, AutoMine, Patrol, ...) finish constantly
+      and are skipped by the isdefault check. Do not remove it.
+    -->
+    <cue name="FleetNotifier_OrderFinished" instantiate="true" namespace="this">
+      <conditions>
+        <event_object_order_finished group="$FleetShips" />
+        <check_value value="event.object.owner == faction.player" />
+        <check_value value="not event.param.isdefault" />
+      </conditions>
+      <actions>
+        <set_value name="$ShipName" exact="event.object.knownname" />
+        <set_value name="$ShipCode" exact="event.object.idcode" />
+
+        <set_value name="$SectorName" exact="'Unknown sector'" />
+        <do_if value="event.object.sector">
+          <set_value name="$SectorName" exact="event.object.sector.knownname" />
+        </do_if>
+
+        <!-- event.param is the finished order; the engine may already have dropped it. -->
+        <set_value name="$OrderName" exact="'Unknown order'" />
+        <do_if value="event.param">
+          <set_value name="$OrderName" exact="event.param.name" />
+        </do_if>
+
+        <set_value name="$Payload" exact="'%s|%s|%s|%s'.[$ShipCode, $ShipName, $OrderName, $SectorName]" />
+
+        <debug_text text="'FleetNotifier: %s'.[$Payload]" chance="100" filter="general" />
+        <raise_lua_event name="'FleetNotifier.OrderFinished'" param="$Payload" />
+      </actions>
+    </cue>
+
+  </cues>
+</mdscript>

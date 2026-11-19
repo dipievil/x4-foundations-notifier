@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<content id="fleet_notifier"
+         name="Fleet Order Notifier"
+         description="Sends LAN push notifications (ntfy / Telegram) when a fleet ship finishes an order."
+         author="Diego"
+         version="100"
+         date="2026-11-19"
+         save="0">
+  <dependency id="djfhe_http" optional="false" />
+</content>
