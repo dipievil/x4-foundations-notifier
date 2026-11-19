@@ -21,28 +21,27 @@ X4 (Windows)                                   same machine
 
 Nothing blocks the game loop: the Lua side fires an asynchronous HTTP request and the server answers immediately, before it talks to the providers.
 
-## Quick start 
+## Quick start
 
 The server binaries are already in `bin/`. They are self-contained — no Go, no runtime, no installer.
 
 **Windows**
 
-1. Download/unpack [x4_http](https://github.com/djfhe/x4_http) into `X4 Foundations/extensions/djfhe_http`. If you downloaded the GitHub zip, rename the extracted folder to `djfhe_http` — the dependency resolves on the folder path.
-2. Download the repository (Code → Download ZIP) and extract it.
-3. Copy the `fleet_notifier` folder into `...\X4 Foundations\extensions\fleet_notifier`.
-4. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
-5. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values.
-6. Open `X4 Foundations\extensions\fleet_notifier\ui\notifier.lua` and put the same token in `local TOKEN = "..."` (or leave both empty).
-7. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
-8. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
+1. Download the repository (Code → Download ZIP) and extract it.
+2. Install the extension: double-click `install-x4-notifier.bat` and follow the prompts — details in [Install the mod](#install-the-mod).
+3. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
+4. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values ([setup guide](docs/notification-apps-guide.md)).
+5. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
+6. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
 
 If Windows SmartScreen warns about the executable, choose "More info → Run anyway". The binaries are unsigned, which is normal for a small mod tool.
 
 **Linux (Proton / Steam Deck)**
 
 ```bash
+./scripts/install.sh          # installs the extension into the Steam library
 cd bin
-cp .env.example .env      # then edit .env
+cp .env.example .env          # then edit .env
 ./x4-notifier-linux-amd64
 ```
 
@@ -57,6 +56,50 @@ Either way, `curl http://127.0.0.1:47100/health` should answer with `"status":"o
 Building the server yourself is optional; see [Building from source](#building-from-source).
 
 ## Install the mod
+
+The mod is a folder (`fleet_notifier/`) that has to end up inside
+`X4 Foundations/extensions/`. You can let a script do it or copy it yourself.
+
+### Option A — the installer script
+
+**Windows:** double-click `install-x4-notifier.bat` in the repository folder.
+
+**Linux / Steam Deck:** run `./scripts/install.sh`.
+
+The script:
+
+1. looks for `X4: Foundations` in your Steam libraries (registry and
+   `libraryfolders.vdf`), and offers the folder it found for you to confirm — you
+   can type a different path instead;
+2. **stops and warns** if that folder has no `X4.exe`, or if
+   `extensions/djfhe_http` is not installed (it prints the download link and how
+   to unpack it, then exits without touching anything);
+3. copies `fleet_notifier/` into `extensions/fleet_notifier`, asking first if an
+   earlier copy is already there;
+4. offers to write the shared token into `ui/notifier.lua`, so it matches your
+   `.env` without editing the file by hand.
+
+Non-interactive use, if you prefer to pass the values:
+
+| Windows (`install.ps1`) | Linux (`install.sh`) | Meaning |
+| --- | --- | --- |
+| `-GamePath <dir>` | `--game-path <dir>` | X4 install folder, skips detection |
+| `-Token <token>` | `--token <token>` | token copied into `ui/notifier.lua` |
+| `-Yes` | `--yes` | accept every confirmation |
+| `-h` | `--help` | show the options |
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -GamePath 'D:\Steam\steamapps\common\X4 Foundations' -Token my-token
+```
+
+```bash
+./scripts/install.sh --game-path "$HOME/.local/share/Steam/steamapps/common/X4 Foundations" --token my-token --yes
+```
+
+The script only installs the extension — the notification app configuration is
+still the `.env` step in Quick start.
+
+### Option B — by hand
 
 1. Download/unpack [x4_http](https://github.com/djfhe/x4_http) into `X4 Foundations/extensions/djfhe_http`. If you downloaded the GitHub zip, rename the extracted folder to `djfhe_http` — the dependency resolves on the folder path.
 2. Copy `fleet_notifier/` into `X4 Foundations/extensions/fleet_notifier`, or run `make mod-package` and extract `dist/fleet_notifier.zip` there.
@@ -162,6 +205,9 @@ go_server/
   dotenv.go                  .env loader
   *_test.go                  tests, providers behind httptest
   .env.example               same template, for running from source
+install-x4-notifier.bat      Windows launcher for the installer
+scripts/install.ps1          installer (Windows)
+scripts/install.sh           installer (Linux / Steam Proton)
 scripts/build-release.sh     builds bin/ for Windows and Linux
 scripts/package-mod.sh       builds dist/fleet_notifier.zip
 docs/implementation.md       design notes and X4 modding gotchas
