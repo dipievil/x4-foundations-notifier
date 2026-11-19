@@ -21,19 +21,20 @@ X4 (Windows)                                   same machine
 
 Nothing blocks the game loop: the Lua side fires an asynchronous HTTP request and the server answers immediately, before it talks to the providers.
 
-## Quick start (nothing to build)
+## Quick start 
 
 The server binaries are already in `bin/`. They are self-contained — no Go, no runtime, no installer.
 
 **Windows**
 
-1. Download the repository (Code → Download ZIP) and extract it.
-2. Copy the `fleet_notifier` folder into `...\X4 Foundations\extensions\fleet_notifier`.
-3. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
-4. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values.
-5. Open `X4 Foundations\extensions\fleet_notifier\ui\notifier.lua` and put the same token in `local TOKEN = "..."` (or leave both empty).
-6. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
-7. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
+1. Download/unpack [x4_http](https://github.com/djfhe/x4_http) into `X4 Foundations/extensions/djfhe_http`. If you downloaded the GitHub zip, rename the extracted folder to `djfhe_http` — the dependency resolves on the folder path.
+2. Download the repository (Code → Download ZIP) and extract it.
+3. Copy the `fleet_notifier` folder into `...\X4 Foundations\extensions\fleet_notifier`.
+4. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
+5. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values.
+6. Open `X4 Foundations\extensions\fleet_notifier\ui\notifier.lua` and put the same token in `local TOKEN = "..."` (or leave both empty).
+7. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
+8. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
 
 If Windows SmartScreen warns about the executable, choose "More info → Run anyway". The binaries are unsigned, which is normal for a small mod tool.
 
@@ -51,7 +52,7 @@ Either way, `curl http://127.0.0.1:47100/health` should answer with `"status":"o
 
 - X4: Foundations, with **Protected UI Mode disabled** (Settings → Game Settings). `djfhe_http` loads native DLLs, so it cannot run in protected mode.
 - [djfhe/x4_http](https://github.com/djfhe/x4_http) installed in `extensions/djfhe_http`. It is a hard dependency in `content.xml`; the extension refuses to load without it.
-- An ntfy topic, a [Gotify](https://gotify.net) server with an application token, and/or a Telegram bot (bot token from @BotFather, chat id from @userinfobot).
+- An ntfy topic, a [Gotify](https://gotify.net) server with an application token, and/or a Telegram bot (bot token from @BotFather, chat id from @userinfobot). Step-by-step setup for each: [docs/notification-apps-guide.md](docs/notification-apps-guide.md).
 
 Building the server yourself is optional; see [Building from source](#building-from-source).
 
@@ -164,6 +165,7 @@ go_server/
 scripts/build-release.sh     builds bin/ for Windows and Linux
 scripts/package-mod.sh       builds dist/fleet_notifier.zip
 docs/implementation.md       design notes and X4 modding gotchas
+docs/notification-apps-guide.md  setting up ntfy, Gotify or Telegram
 ```
 
 ## Caveats
