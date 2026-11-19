@@ -28,20 +28,18 @@ The server binaries are already in `bin/`. They are self-contained — no Go, no
 **Windows**
 
 1. Download the repository (Code → Download ZIP) and extract it.
-2. Install the extension: double-click `install-x4-notifier.bat` and follow the prompts — details in [Install the mod](#install-the-mod).
-3. Copy the whole `bin` folder somewhere permanent, for example `%USERPROFILE%\x4-notifier`.
-4. Rename `bin\.env.example` to `bin\.env` and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values ([setup guide](docs/notification-apps-guide.md)).
-5. Double-click `bin\start-x4-notifier.bat` and leave the window open while you play. It shows a log line for every event it receives.
-6. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
+2. Double-click `install-x4-notifier.bat` and follow the prompts — it installs the extension and copies the server to `%LOCALAPPDATA%\x4-notifier` (details in [Install the mod](#install-the-mod)).
+3. Edit the `.env` file in that server folder and fill in `X4_TOKEN`, plus `NTFY_TOPIC`, `GOTIFY_URL` + `GOTIFY_TOKEN`, and/or the two Telegram values ([setup guide](docs/notification-apps-guide.md)).
+4. Double-click `start-x4-notifier.bat` in the same folder and leave the window open while you play. It shows a log line for every event it receives.
+5. Start X4 and check Settings → Extensions: **djfhe http** and **Fleet Order Notifier** must both be enabled.
 
 If Windows SmartScreen warns about the executable, choose "More info → Run anyway". The binaries are unsigned, which is normal for a small mod tool.
 
 **Linux (Proton / Steam Deck)**
 
 ```bash
-./scripts/install.sh          # installs the extension into the Steam library
-cd bin
-cp .env.example .env          # then edit .env
+./scripts/install.sh                  # extension into the Steam library, server into ~/.local/share/x4-notifier
+cd ~/.local/share/x4-notifier         # edit .env here, then start it
 ./x4-notifier-linux-amd64
 ```
 
@@ -76,28 +74,32 @@ The script:
    to unpack it, then exits without touching anything);
 3. copies `fleet_notifier/` into `extensions/fleet_notifier`, asking first if an
    earlier copy is already there;
-4. offers to write the shared token into `ui/notifier.lua`, so it matches your
-   `.env` without editing the file by hand.
+4. offers to write the shared token into `ui/notifier.lua`;
+5. copies the server (`x4-notifier` binary plus the Windows launcher) to
+   `%LOCALAPPDATA%\x4-notifier` on Windows or `~/.local/share/x4-notifier` on
+   Linux, and creates `.env` there from the template — pre-filled with the token
+   you entered, and never overwriting a `.env` that already exists.
 
 Non-interactive use, if you prefer to pass the values:
 
 | Windows (`install.ps1`) | Linux (`install.sh`) | Meaning |
 | --- | --- | --- |
 | `-GamePath <dir>` | `--game-path <dir>` | X4 install folder, skips detection |
-| `-Token <token>` | `--token <token>` | token copied into `ui/notifier.lua` |
+| `-InstallDir <dir>` | `--install-dir <dir>` | where the server goes |
+| `-Token <token>` | `--token <token>` | token written into `ui/notifier.lua` and `.env` |
 | `-Yes` | `--yes` | accept every confirmation |
 | `-h` | `--help` | show the options |
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -GamePath 'D:\Steam\steamapps\common\X4 Foundations' -Token my-token
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -GamePath 'D:\Steam\steamapps\common\X4 Foundations' -Token my-token -Yes
 ```
 
 ```bash
 ./scripts/install.sh --game-path "$HOME/.local/share/Steam/steamapps/common/X4 Foundations" --token my-token --yes
 ```
 
-The script only installs the extension — the notification app configuration is
-still the `.env` step in Quick start.
+The notification app values still go in the `.env` the script creates — see the
+[setup guide](docs/notification-apps-guide.md).
 
 ### Option B — by hand
 

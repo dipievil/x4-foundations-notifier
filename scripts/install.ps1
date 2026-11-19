@@ -13,7 +13,10 @@
     X4 install folder (the one containing X4.exe). Skips the automatic search.
 
 .PARAMETER Token
-    Shared token written into ui\notifier.lua. Must match X4_TOKEN in .env.
+    Shared token written into ui\notifier.lua and .env. Must match X4_TOKEN.
+
+.PARAMETER InstallDir
+    Where the server files go (default: %LOCALAPPDATA%\x4-notifier).
 
 .PARAMETER Yes
     Accept every confirmation (for unattended runs).
@@ -28,6 +31,7 @@
 param(
     [string]$GamePath,
     [string]$Token,
+    [string]$InstallDir,
     [switch]$Yes
 )
 
@@ -226,14 +230,79 @@ if ($Token) {
     }
 }
 
-# --- 5. what is left --------------------------------------------------------
+# --- 5. deploy the server folder -------------------------------------------
+
+Write-Say ''
+if (-not $InstallDir) {
+    if ($env:LOCALAPPDATA) {
+        $InstallDir = Join-Path $env:LOCALAPPDATA 'x4-notifier'
+    } else {
+        $InstallDir = Join-Path (Join-Path $HOME '.local/share') 'x4-notifier'
+    }
+}
+Write-Say 'Server folder:'
+Write-Say "  $InstallDir"
+
+$deployServer = Confirm-Step 'Copy the server files there?'
+if (-not $deployServer) {
+    Write-Warn 'Server files not copied; only the extension was installed.'
+} else {
+    if (-not (Test-Path -LiteralPath $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    $serverFiles = @('x4-notifier-windows-amd64.exe', 'start-x4-notifier.bat')
+    foreach ($name in $serverFiles) {
+        $from = Join-Path (Join-Path $root 'bin') $name
+        if (Test-Path -LiteralPath $from) {
+            Copy-Item -LiteralPath $from -Destination (Join-Path $InstallDir $name) -Force
+        } else {
+            Write-Warn "bin\$name is missing; copy it yourself."
+        }
+    }
+    Write-Say 'Server files: copied'
+
+    $envFile   = Join-Path $InstallDir '.env'
+    $envSample = Join-Path (Join-Path $root 'bin') '.env.example'
+    if (-not (Test-Path -LiteralPath $envFile)) {
+        if (Test-Path -LiteralPath $envSample) {
+            $lines = Get-Content -LiteralPath $envSample
+            if ($Token) {
+                $lines = $lines -replace '^X4_TOKEN=.*$', ('X4_TOKEN={0}' -f $Token)
+            }
+            $utf8 = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllLines($envFile, $lines, $utf8)
+            Write-Say "Configuration: created $envFile"
+        } else {
+            Write-Warn "bin\.env.example is missing; create $envFile yourself."
+        }
+    } else {
+        Write-Say "Configuration: kept the existing $envFile"
+        if ($Token) {
+            Write-Warn "make sure X4_TOKEN in $envFile matches the token you entered."
+        }
+    }
+}
+
+# --- 6. what is left --------------------------------------------------------
 
 Write-Say ''
 Write-Say 'Done. Installed to:'
 Write-Say "  $destination"
+if ($deployServer) {
+    Write-Say 'Server folder:'
+    Write-Say "  $InstallDir"
+}
 Write-Say ''
 Write-Say 'Next steps:'
 Write-Say "  1. In X4: Settings > Extensions, enable 'djfhe http' and 'Fleet Order Notifier'."
 Write-Say '  2. In X4: Settings > Game Settings, turn Protected UI Mode OFF.'
-Write-Say '  3. Rename bin\.env.example to bin\.env, fill in the notification app values'
-Write-Say '     (see docs\notification-apps-guide.md) and run bin\start-x4-notifier.bat.'
+if ($deployServer) {
+    Write-Say "  3. Edit $(Join-Path $InstallDir '.env') with your notification app values"
+    Write-Say '     (see docs\notification-apps-guide.md).'
+    Write-Say '  4. Double-click start-x4-notifier.bat in the server folder and keep it running'
+    Write-Say '     while you play.'
+} else {
+    Write-Say '  3. Rename bin\.env.example to bin\.env, fill in the notification app values'
+    Write-Say '     (see docs\notification-apps-guide.md) and run bin\start-x4-notifier.bat.'
+}

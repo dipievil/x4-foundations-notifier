@@ -18,15 +18,19 @@ source_dir="$root/fleet_notifier"
 
 game_path=""
 token=""
+install_dir=""
 assume_yes=0
 
 usage() {
     cat <<'EOF'
-Install the Fleet Order Notifier extension into X4: Foundations.
+Install the Fleet Order Notifier extension into X4: Foundations and copy the
+server files to a folder of their own.
 
 Options:
   --game-path <dir>   X4 install folder (the one containing X4.exe)
-  --token <token>     shared token, copied into ui/notifier.lua (A-Z a-z 0-9 . _ -)
+  --install-dir <dir> where the server lives (default: ~/.local/share/x4-notifier)
+  --token <token>     shared token, written into ui/notifier.lua and .env
+                      (allowed characters: A-Z a-z 0-9 . _ -)
   -y, --yes           accept every confirmation
   -h, --help          show this help
 EOF
@@ -36,6 +40,8 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --game-path) game_path="${2:-}"; shift 2 ;;
         --game-path=*) game_path="${1#*=}"; shift ;;
+        --install-dir) install_dir="${2:-}"; shift 2 ;;
+        --install-dir=*) install_dir="${1#*=}"; shift ;;
         --token) token="${2:-}"; shift 2 ;;
         --token=*) token="${1#*=}"; shift ;;
         -y|--yes) assume_yes=1; shift ;;
@@ -216,14 +222,66 @@ if [ -n "$token" ]; then
     fi
 fi
 
-# --- 5. what is left --------------------------------------------------------
+# --- 5. deploy the server folder -------------------------------------------
+
+say ""
+install_dir="${install_dir:-${XDG_DATA_HOME:-$HOME/.local/share}/x4-notifier}"
+say "Server folder:"
+say "  $install_dir"
+deploy_server=1
+if ! confirm "Copy the server files there?"; then
+    deploy_server=0
+    warn "Server files not copied; only the extension was installed."
+fi
+
+if [ "$deploy_server" -eq 1 ]; then
+    mkdir -p "$install_dir"
+
+    if [ -f "$root/bin/x4-notifier-linux-amd64" ]; then
+        cp -f "$root/bin/x4-notifier-linux-amd64" "$install_dir/"
+        chmod +x "$install_dir/x4-notifier-linux-amd64"
+        say "Server binary: copied"
+    else
+        warn "$root/bin/x4-notifier-linux-amd64 is missing; copy the binary yourself."
+    fi
+
+    env_file="$install_dir/.env"
+    if [ -f "$root/bin/.env.example" ] && [ ! -f "$env_file" ]; then
+        if [ -n "$token" ]; then
+            sed "s|^X4_TOKEN=.*|X4_TOKEN=$token|" "$root/bin/.env.example" > "$env_file"
+        else
+            cp "$root/bin/.env.example" "$env_file"
+        fi
+        say "Configuration: created $env_file"
+    elif [ -f "$env_file" ]; then
+        say "Configuration: kept the existing $env_file"
+        if [ -n "$token" ]; then
+            warn "make sure X4_TOKEN in $env_file matches the token you entered."
+        fi
+    else
+        warn "bin/.env.example is missing; create $env_file yourself."
+    fi
+fi
+
+# --- 6. what is left --------------------------------------------------------
 
 say ""
 say "Done. Installed to:"
 say "  $destination"
+if [ "$deploy_server" -eq 1 ]; then
+    say "Server folder:"
+    say "  $install_dir"
+fi
 say ""
 say "Next steps:"
 say "  1. In X4: Settings > Extensions, enable 'djfhe http' and 'Fleet Order Notifier'."
 say "  2. In X4: Settings > Game Settings, turn Protected UI Mode OFF."
-say "  3. Copy bin/.env.example to bin/.env, fill in the notification app values"
-say "     (see docs/notification-apps-guide.md) and start the server."
+if [ "$deploy_server" -eq 1 ]; then
+    say "  3. Edit $install_dir/.env with your notification app values"
+    say "     (see docs/notification-apps-guide.md)."
+    say "  4. Start the server and keep it running while you play:"
+    say "     cd '$install_dir' && ./x4-notifier-linux-amd64"
+else
+    say "  3. Copy bin/.env.example to bin/.env, fill in the notification app values"
+    say "     (see docs/notification-apps-guide.md) and start the server from there."
+fi

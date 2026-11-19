@@ -11,12 +11,16 @@ with — you can enable more later, they all work at the same time.
 
 ## Before you start
 
-1. Copy `bin/.env.example` to `bin/.env`.
-2. Fill in the values for the app you chose (each section below says which).
-3. Start the server with `bin/start-x4-notifier.bat` (Windows) or
-   `./bin/x4-notifier-linux-amd64` (Linux). It reads `.env` from its own folder,
-   so keep them together.
-4. Settings are read once at startup — after editing `.env`, stop the server
+1. Find the server folder. With the installer it is
+   `%LOCALAPPDATA%\x4-notifier` on Windows and `~/.local/share/x4-notifier` on
+   Linux; if you copied `bin` by hand, it is that `bin` folder.
+2. Open the `.env` file there — the installer creates it. If it is missing, copy
+   `.env.example` to `.env`.
+3. Fill in the values for the app you chose (each section below says which).
+4. Start the server: `start-x4-notifier.bat` on Windows,
+   `./x4-notifier-linux-amd64` on Linux. It reads `.env` from its own folder, so
+   keep them together.
+5. Settings are read once at startup — after editing `.env`, stop the server
    (close the window) and start it again.
 
 Only the values you fill in matter; leave the others empty.
